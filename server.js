@@ -224,7 +224,77 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+app.use(express.json()); // Додати це перед роутами, якщо немає
 
+app.post('/walk', async (req, res) => {
+  const { username } = req.body;
+  
+  try {
+    // Отримуємо гравця і поточну глибину
+    const playerResult = await pool.query('SELECT * FROM players WHERE username = $1', [username]);
+    const depthResult = await pool.query('SELECT current_depth FROM game_state WHERE id = 1');
+    
+    if (playerResult.rows.length === 0) {
+      return res.json({ success: false, message: 'Гравця не знайдено' });
+    }
+    
+    const player = playerResult.rows[0];
+    const currentDepth = parseFloat(depthResult.rows[0].current_depth);
+    
+    // Перевірка умов
+    if (!player.alive) {
+      return res.json({ success: false, message: 'Змія мертва 💀' });
+    }
+    
+    if (player.last_loss_depth === null) {
+      return res.json({ success: false, message: 'Луска ще не повна' });
+    }
+    
+    const threshold = player.last_loss_depth * (1 - player.play_threshold);
+    if (currentDepth > threshold) {
+      return res.json({ 
+        success: false, 
+        message: `Потрібно піднятися вище (зараз ${Math.round(currentDepth)}м, треба ≤${Math.round(threshold)}м)` 
+      });
+    }
+    
+    // Виконуємо прогулянку
+    const newScales = player.scales - 1;
+    const newLostScales = player.lost_scales + 1;
+    const newCoins = player.coins + 1;
+    const alive = newScales > 0;
+    
+    await pool.query(`
+      UPDATE players 
+      SET scales = $1, 
+          lost_scales = $2, 
+          coins = $3, 
+          last_loss_depth = $4,
+          alive = $5,
+          death_time = CASE WHEN $5 = false THEN NOW() ELSE death_time END
+      WHERE username = $6
+    `, [newScales, newLostScales, newCoins, currentDepth, alive, username]);
+    
+    // Повідомляємо всіх через Socket.io
+    io.emit('players_updated', [{
+      username: player.username,
+      scales: parseFloat(newScales.toFixed(2)),
+      lost_scales: newLostScales,
+      coins: newCoins,
+      alive: alive,
+      action: `${username}: прогулявся вручну (-1 луска, +1 монета)${!alive ? ' → ЗМІЯ ПОМЕРЛА 💀' : ''}`
+    }]);
+    
+    res.json({ 
+      success: true, 
+      message: alive ? 'Прогулянка успішна! -1 луска, +1 монета 🪙' : 'Остання прогулянка... Змія померла 💀'
+    });
+    
+  } catch (err) {
+    console.error('Помилка в /walk:', err);
+    res.json({ success: false, message: 'Помилка сервера' });
+  }
+});
 // Обробка введення імені
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();
@@ -314,6 +384,20 @@ function generatePlayerPage(player, isNew) {
         <p class="lost"><strong>Втрачено луски:</strong> ${player.lost_scales}</p>
         <p class="coins"><strong>Монети:</strong> ${player.coins} 🪙</p>
         <p class="status"><strong>Статус:</strong> ${player.alive ? 'Жива 🐉' : 'Зникла 💀'}</p>
+        
+  <button id="walk-btn" style="
+    margin-top: 15px;
+    padding: 10px 20px;
+    background: #7fffd4;
+    color: #001f3f;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    cursor: pointer;
+    font-weight: bold;
+  ">🚶 Гуляти</button>
+  
+  <p id="walk-status" style="font-size: 0.9em; color: #aaa; margin-top: 10px;"></p>
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
 
@@ -390,6 +474,37 @@ function generatePlayerPage(player, isNew) {
         socket.on('disconnect', () => {
           console.log('❌ Відключено від сервера');
         });
+
+        document.getElementById('walk-btn').addEventListener('click', () => {
+  const btn = document.getElementById('walk-btn');
+  const status = document.getElementById('walk-status');
+  
+  btn.disabled = true;
+  status.textContent = 'Перевіряємо умови...';
+  
+  fetch('/walk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      status.style.color = '#7fffd4';
+      status.textContent = '✓ ' + data.message;
+    } else {
+      status.style.color = '#ff6b6b';
+      status.textContent = '✗ ' + data.message;
+    }
+    setTimeout(() => { btn.disabled = false; }, 2000);
+  })
+  .catch(err => {
+    status.style.color = '#ff6b6b';
+    status.textContent = 'Помилка з\'єднання';
+    btn.disabled = false;
+  });
+});
+
       </script>
 
       <br>

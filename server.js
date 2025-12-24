@@ -1,17 +1,28 @@
 const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
+const http = require('http');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Підключення до PostgreSQL на Render (автоматично додає змінну DATABASE_URL)
+// Підключення до PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// === Перевірка підключення до БД при старті ===
+// Створюємо HTTP сервер і підключаємо Socket.io
+const server = http.createServer(app);
+const { Server } = require('socket.io');
+const io = new Server(server, {
+  cors: {
+    origin: "*", // пізніше можна обмежити
+    methods: ["GET", "POST"]
+  }
+});
+
+// === Перевірка підключення до БД ===
 async function checkDatabaseConnection() {
   try {
     const client = await pool.connect();
@@ -23,31 +34,26 @@ async function checkDatabaseConnection() {
   }
 }
 
-// Викликаємо перевірку і тільки після успіху запускаємо сервер
+// === Ініціалізація БД і запуск сервера ===
 checkDatabaseConnection()
-  .then(() => {
-    // Створюємо таблицю players
-    return pool.query(`
-      CREATE TABLE IF NOT EXISTS players (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        scales FLOAT DEFAULT 50,
-        lost_scales INTEGER DEFAULT 0,
-        coins INTEGER DEFAULT 0,
-        last_loss_depth FLOAT,
-        alive BOOLEAN DEFAULT TRUE,
-        start_time TIMESTAMP DEFAULT NOW(),
-        death_time TIMESTAMP,
-        eat_threshold FLOAT DEFAULT 0.005,
-        play_threshold FLOAT DEFAULT 0.05,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-  })
+  .then(() => pool.query(`
+    CREATE TABLE IF NOT EXISTS players (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      scales FLOAT DEFAULT 50,
+      lost_scales INTEGER DEFAULT 0,
+      coins INTEGER DEFAULT 0,
+      last_loss_depth FLOAT,
+      alive BOOLEAN DEFAULT TRUE,
+      start_time TIMESTAMP DEFAULT NOW(),
+      death_time TIMESTAMP,
+      eat_threshold FLOAT DEFAULT 0.005,
+      play_threshold FLOAT DEFAULT 0.05,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `))
   .then(() => {
     console.log('📊 Таблиця players готова або вже існує');
-
-    // Створюємо таблицю game_state
     return pool.query(`
       CREATE TABLE IF NOT EXISTS game_state (
         id INTEGER PRIMARY KEY DEFAULT 1,
@@ -59,8 +65,6 @@ checkDatabaseConnection()
   })
   .then(() => {
     console.log('🌊 Таблиця game_state готова або вже існує');
-
-    // Ініціалізуємо рядок з глибиною, якщо його ще немає
     return pool.query(`
       INSERT INTO game_state (id, current_depth)
       VALUES (1, 500)
@@ -70,35 +74,44 @@ checkDatabaseConnection()
   .then(() => {
     console.log('🌊 Глобальна глибина ініціалізована (500 м)');
 
-    // === ТЕПЕР ЗАПУСКАЄМО СЕРВЕР ===
-    app.listen(port, () => {
+    // === ЗАПУСК СЕРВЕРА ЧЕРЕЗ server (для Socket.io) ===
+    server.listen(port, () => {
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
     });
 
-    // === Запускаємо зміну глибини кожні 30 секунд ===
+    // === Глобальний потік — зміна глибини кожні 30 сек + розсилка через Socket.io ===
     setInterval(async () => {
       try {
         const rand = Math.random();
         let depthChange = 0;
-        if (rand < 0.17) depthChange = 50;         // глибше
-        else if (rand < 0.34) depthChange = -50;   // вище
-        // інакше 66% — без змін
+        if (rand < 0.17) depthChange = 50;
+        else if (rand < 0.34) depthChange = -50;
 
         const result = await pool.query(`
           UPDATE game_state 
           SET current_depth = current_depth + $1,
               last_update = NOW()
           WHERE id = 1
-          RETURNING current_depth
+          RETURNING current_depth, last_update
         `, [depthChange]);
 
-        const newDepth = result.rows[0].current_depth;
-        console.log(`🌊 Глибина оновлена: ${newDepth.toFixed(0)} м (зміна: ${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
+        const { current_depth, last_update } = result.rows[0];
+
+        console.log(`🌊 Глибина оновлена: ${Math.round(current_depth)} м (зміна: ${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
+
+        // Розсилаємо всім підключеним клієнтам
+        io.emit('depth_update', {
+          depth: current_depth,
+          lastUpdate: last_update.toISOString(),
+          serverTime: new Date().toISOString()
+        });
+
       } catch (err) {
         console.error('Помилка оновлення глибини:', err);
       }
-    }, 30000); // кожні 30 секунд
+    }, 30000);
+
   })
   .catch(err => {
     console.error('Помилка ініціалізації бази даних:', err);
@@ -113,53 +126,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API для отримання поточної глибини
-app.get('/api/depth', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT current_depth FROM game_state WHERE id = 1');
-    if (result.rows.length > 0) {
-      res.json({ depth: result.rows[0].current_depth });
-    } else {
-      res.status(500).json({ error: 'Глибина не ініціалізована' });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Помилка сервера' });
-  }
-});
-// API для отримання глибини + поточного серверного часу + часу останнього оновлення
-app.get('/api/status', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT current_depth, last_update 
-      FROM game_state 
-      WHERE id = 1
-    `);
 
-    if (result.rows.length === 0) {
-      return res.status(500).json({ error: 'Game state not initialized' });
-    }
-
-    const { current_depth, last_update } = result.rows[0];
-    const now = new Date();
-
-    res.json({
-      depth: current_depth,
-      serverTime: now.toLocaleString('uk-UA', { 
-        timeZone: 'Europe/Kiev',
-        hour12: false 
-      }),
-      lastUpdate: new Date(last_update).toLocaleString('uk-UA', { 
-        timeZone: 'Europe/Kiev',
-        hour12: false 
-      }),
-      rawNow: now // для точних розрахунків, якщо знадобиться
-    });
-  } catch (err) {
-    console.error('Помилка /api/status:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
 // Обробка введення імені
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();

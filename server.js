@@ -353,7 +353,7 @@ function generatePlayerPage(player, isNew) {
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>
     </body>
-    </html>
+    </html> 
   `;
 }
 

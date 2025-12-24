@@ -17,7 +17,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-    origin: "*", // пізніше можна обмежити
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
@@ -79,6 +79,7 @@ checkDatabaseConnection()
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
     });
+
     // === Глобальний потік + логіка змії кожні 30 сек ===
     setInterval(async () => {
       try {
@@ -110,41 +111,54 @@ checkDatabaseConnection()
         for (let player of playersResult.rows) {
           let updated = false;
           let actionLog = `${player.username}: `;
-           // === Ініціалізація last_loss_depth якщо луска повна ===
-  if (player.scales >= 50 && !player.last_loss_depth) {
-    player.last_loss_depth = newDepth;
-    updated = true;
-    actionLog += `луска повна, готова до пригод на глибині ${Math.round(newDepth)}м `;
-  }
-  // === Резвитися (втрата луски при підйомі) ===
-  else if (player.last_loss_depth && 
-      newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
-    
-    player.scales -= 1;
-    player.lost_scales += 1;
-    player.coins += 1;
-    player.last_loss_depth = newDepth;  // Оновлюємо позицію втрати
-    updated = true;
-    actionLog += `резвився (-1 луска, +1 монета) `;
-    
-    if (player.scales <= 0) {
-      player.scales = 0;
-      player.alive = false;
-      player.death_time = new Date();
-      actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
-    }
-  }
-  // === ПОТІМ Їсти (тільки якщо НЕ резвився цього тику) ===
-  else if (player.scales < 50 &&
-           player.last_loss_depth &&
-           newDepth >= player.last_loss_depth * (1 + player.eat_threshold)) {
-    
-    const bonus = (newDepth - player.last_loss_depth) / player.last_loss_depth;
-    player.scales += 1 + bonus;
-    updated = true;
-    actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
-  }
+          
+          // Конвертуємо в числа для точності
+          const scales = parseFloat(player.scales);
+          const lostScales = parseInt(player.lost_scales);
+          const coins = parseInt(player.coins);
+          let lastLossDepth = player.last_loss_depth ? parseFloat(player.last_loss_depth) : null;
 
+          // === Ініціалізація last_loss_depth якщо луска повна ===
+          if (scales >= 50 && lastLossDepth === null) {
+            lastLossDepth = newDepth;
+            updated = true;
+            actionLog += `луска повна, готова до пригод на глибині ${Math.round(newDepth)}м `;
+          }
+          // === Резвитися (втрата луски при підйомі) ===
+          else if (lastLossDepth !== null && 
+                   newDepth <= lastLossDepth * (1 - player.play_threshold)) {
+            
+            player.scales = scales - 1;
+            player.lost_scales = lostScales + 1;
+            player.coins = coins + 1;
+            player.last_loss_depth = newDepth;
+            updated = true;
+            actionLog += `резвився (-1 луска, +1 монета) `;
+            
+            if (player.scales <= 0) {
+              player.scales = 0;
+              player.alive = false;
+              player.death_time = new Date();
+              actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+            }
+          }
+          // === Їсти (тільки якщо НЕ резвився цього тику) ===
+          else if (scales < 50 &&
+                   lastLossDepth !== null &&
+                   newDepth >= lastLossDepth * (1 + player.eat_threshold)) {
+            
+            const bonus = (newDepth - lastLossDepth) / lastLossDepth;
+            const scaleGain = 1 + bonus;
+            player.scales = Math.min(50, scales + scaleGain); // Обмежуємо максимум 50
+            updated = true;
+            actionLog += `їла (+${scaleGain.toFixed(2)} луски) 🎣`;
+            
+            // Скидаємо last_loss_depth коли луска повна
+            if (player.scales >= 50) {
+              player.last_loss_depth = null;
+              actionLog += ` → луска повна!`;
+            }
+          }
 
           if (updated) {
             await pool.query(`
@@ -196,7 +210,6 @@ checkDatabaseConnection()
         console.error('Помилка в циклі гри:', err);
       }
     }, 30000);
-    
 
   })
   .catch(err => {
@@ -204,7 +217,7 @@ checkDatabaseConnection()
     process.exit(1);
   });
 
-// Статичні файли та роути — залишаються тут (виконуються відразу, це нормально)
+// Статичні файли та роути
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 
@@ -212,11 +225,10 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-
 // Обробка введення імені
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();
-  const startDepth = 500;
+  
   if (!username || username.length < 2 || username.length > 20) {
     return res.send(`
       <h2>Помилка: Ім'я має бути від 2 до 20 символів</h2>
@@ -233,15 +245,13 @@ app.post('/join', async (req, res) => {
       const player = result.rows[0];
       res.send(generatePlayerPage(player, false));
     } else {
-      // Створюємо нового
-      const startDepth = 500;
+      // Створюємо нового (last_loss_depth = NULL спочатку)
       result = await pool.query(`
         INSERT INTO players 
         (username, scales, lost_scales, coins, last_loss_depth, alive, start_time)
-        VALUES ($1, 50, 0, 0, $2, true, NOW())
+        VALUES ($1, 50, 0, 0, NULL, true, NOW())
         RETURNING *
-      `, [username, startDepth]);  // <-- Додайте startDepth як $2
-      
+      `, [username]);
 
       const newPlayer = result.rows[0];
       res.send(generatePlayerPage(newPlayer, true));
@@ -251,25 +261,48 @@ app.post('/join', async (req, res) => {
     res.send('<h2>Помилка бази даних. Спробуйте пізніше.</h2>');
   }
 });
+
 function generatePlayerPage(player, isNew) {
   const welcomeMsg = isNew 
     ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія готова до пригод!</h2>`
     : `<h2>З поверненням, ${player.username}!</h2>`;
 
-  // Важливо: весь клієнтський скрипт у лапках, як рядок!
   return `
     <!DOCTYPE html>
     <html lang="uk">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Водяна Змія</title>
+      <title>Водяна Змія - ${player.username}</title>
       <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; background: #001f3f; color: #fff; }
-        .card { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 400px; margin: 10px auto; }
+        body { 
+          font-family: Arial, sans-serif; 
+          text-align: center; 
+          margin: 50px; 
+          background: #001f3f; 
+          color: #fff; 
+        }
+        .card { 
+          background: rgba(255,255,255,0.1); 
+          padding: 30px; 
+          border-radius: 15px; 
+          display: inline-block; 
+          min-width: 400px; 
+          margin: 10px auto; 
+        }
         h1 { color: #7fffd4; }
         #current-depth { font-size: 1.5em; font-weight: bold; color: #7fffd4; }
-        .notification { color: #7fffd4; font-style: italic; margin-top: 10px; }
+        .notification { 
+          color: #7fffd4; 
+          font-style: italic; 
+          margin-top: 10px; 
+          animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .dead { color: #ff6b6b; }
       </style>
     </head>
     <body>
@@ -295,66 +328,69 @@ function generatePlayerPage(player, isNew) {
       </div>
 
       <script src="/socket.io/socket.io.js"></script>
-      
-<script>
-  const socket = io();
-  const username = "${player.username}";
+      <script>
+        const socket = io();
+        const username = "${player.username}";
 
-  function formatDate(isoString) {
-    if (!isoString) return '--';
-    return new Date(isoString).toLocaleString('uk-UA', {
-      timeZone: 'Europe/Kiev',
-      hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    });
-  }
+        function formatDate(isoString) {
+          if (!isoString) return '--';
+          return new Date(isoString).toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev',
+            hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          });
+        }
 
-  socket.on('depth_update', (data) => {
-    document.getElementById('current-depth').textContent = Math.round(data.depth);
-    document.getElementById('server-time').textContent = formatDate(data.serverTime);
-    document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
-    countdownValue = 30;
-    document.getElementById('countdown').textContent = countdownValue;
-  });
+        socket.on('depth_update', (data) => {
+          document.getElementById('current-depth').textContent = Math.round(data.depth);
+          document.getElementById('server-time').textContent = formatDate(data.serverTime);
+          document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+          countdownValue = 30;
+          document.getElementById('countdown').textContent = countdownValue;
+        });
 
-  socket.on('players_updated', (players) => {
-    players.forEach(p => {
-      if (p.username === username) {
-        document.querySelector('.scales').innerHTML = '<strong>Луска:</strong> ' + p.scales.toFixed(1) + (p.alive ? '' : ' 💀');
-        document.querySelector('.lost').innerHTML = '<strong>Втрачено луски:</strong> ' + p.lost_scales;
-        document.querySelector('.coins').innerHTML = '<strong>Монети:</strong> ' + p.coins + ' 🪙';
-        document.querySelector('.status').innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Жива 🐉' : 'Зникла 💀');
+        socket.on('players_updated', (players) => {
+          players.forEach(p => {
+            if (p.username === username) {
+              const isDead = !p.alive;
+              document.querySelector('.scales').innerHTML = '<strong>Луска:</strong> ' + p.scales.toFixed(1) + (isDead ? ' 💀' : '');
+              document.querySelector('.lost').innerHTML = '<strong>Втрачено луски:</strong> ' + p.lost_scales;
+              document.querySelector('.coins').innerHTML = '<strong>Монети:</strong> ' + p.coins + ' 🪙';
+              document.querySelector('.status').innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Жива 🐉' : '<span class="dead">Зникла 💀</span>');
 
-        const notification = document.createElement('div');
-        notification.className = 'notification';
-        notification.textContent = '➤ ' + p.action;
-        document.getElementById('player-card').appendChild(notification);
+              const notification = document.createElement('div');
+              notification.className = 'notification';
+              notification.textContent = '➤ ' + p.action;
+              document.getElementById('player-card').appendChild(notification);
 
-        setTimeout(() => {
-          if (notification.parentNode) notification.remove();
-        }, 10000);
-      }
-    });
-  });
+              setTimeout(() => {
+                if (notification.parentNode) notification.remove();
+              }, 10000);
+            }
+          });
+        });
 
-  let countdownValue = 30;
-  setInterval(() => {
-    countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
-    document.getElementById('countdown').textContent = countdownValue;
-  }, 1000);
+        let countdownValue = 30;
+        setInterval(() => {
+          countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
+          document.getElementById('countdown').textContent = countdownValue;
+        }, 1000);
 
-  setInterval(() => {
-    document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
-      timeZone: 'Europe/Kiev', hour12: false
-    });
-  }, 1000);
+        setInterval(() => {
+          document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev', hour12: false
+          });
+        }, 1000);
 
-  socket.on('connect', () => {
-    console.log('✅ Підключено до сервера в реальному часі');
-  });
-</script>
+        socket.on('connect', () => {
+          console.log('✅ Підключено до сервера в реальному часі');
+        });
 
+        socket.on('disconnect', () => {
+          console.log('❌ Відключено від сервера');
+        });
+      </script>
 
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>
@@ -362,4 +398,3 @@ function generatePlayerPage(player, isNew) {
     </html> 
   `;
 }
-

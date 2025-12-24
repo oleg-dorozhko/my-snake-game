@@ -315,10 +315,10 @@ function generatePlayerPage(player, isNew) {
   socket.on('players_updated', (players) => {
     players.forEach(p => {
       if (p.username === username) {
-        document.querySelector('.scales').innerHTML = `<strong>Луска:</strong> $\{p.scales.toFixed(1)\} $\{p.alive ? '' : '💀'\}`;
-        document.querySelector('.lost').innerHTML = `<strong>Втрачено луски:</strong> $\{p.lost_scales\}`;
-        document.querySelector('.coins').innerHTML = `<strong>Монети:</strong> $\{p.coins\} 🪙`;
-        document.querySelector('.status').innerHTML = `<strong>Статус:</strong> $\{p.alive ? 'Жива 🐉' : 'Зникла 💀'\}`;
+        document.querySelector('.scales').innerHTML = '<strong>Луска:</strong> ' + p.scales.toFixed(1) + (p.alive ? '' : ' 💀');
+        document.querySelector('.lost').innerHTML = '<strong>Втрачено луски:</strong> ' + p.lost_scales;
+        document.querySelector('.coins').innerHTML = '<strong>Монети:</strong> ' + p.coins + ' 🪙';
+        document.querySelector('.status').innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Жива 🐉' : 'Зникла 💀');
 
         const notification = document.createElement('div');
         notification.className = 'notification';
@@ -348,6 +348,7 @@ function generatePlayerPage(player, isNew) {
     console.log('✅ Підключено до сервера в реальному часі');
   });
 </script>
+
 
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>

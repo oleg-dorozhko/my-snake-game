@@ -111,35 +111,35 @@ checkDatabaseConnection()
           let updated = false;
           let actionLog = `${player.username}: `;
           
-          // === Їсти (тільки якщо НЕ резвився цього тику і є умови) ===
- if (player.scales < 50 &&
-         player.last_loss_depth &&
-         newDepth >= player.last_loss_depth * (1 + player.eat_threshold)) {
-  
-  const bonus = (newDepth - player.last_loss_depth) / player.last_loss_depth;
-  player.scales += 1 + bonus;
-  updated = true;
-  actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
-}
-
-else          // === Резвитися ===
-if (player.last_loss_depth && 
-    newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
-  
-  player.scales -= 1;
-  player.lost_scales += 1;
-  player.coins += 1;
-  player.last_loss_depth = newDepth;
-  updated = true;
-  actionLog += `резвився (-1 луска, +1 монета) `;
-  
-  if (player.scales <= 0) {
-    player.scales = 0;
-    player.alive = false;
-    player.death_time = new Date();
-    actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+         // === СПОЧАТКУ Резвитися (втрата луски при підйомі) ===
+  if (player.last_loss_depth && 
+      newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
+    
+    player.scales -= 1;
+    player.lost_scales += 1;
+    player.coins += 1;
+    player.last_loss_depth = newDepth;  // Оновлюємо позицію втрати
+    updated = true;
+    actionLog += `резвився (-1 луска, +1 монета) `;
+    
+    if (player.scales <= 0) {
+      player.scales = 0;
+      player.alive = false;
+      player.death_time = new Date();
+      actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+    }
   }
-}
+  // === ПОТІМ Їсти (тільки якщо НЕ резвився цього тику) ===
+  else if (player.scales < 50 &&
+           player.last_loss_depth &&
+           newDepth >= player.last_loss_depth * (1 + player.eat_threshold)) {
+    
+    const bonus = (newDepth - player.last_loss_depth) / player.last_loss_depth;
+    player.scales += 1 + bonus;
+    updated = true;
+    actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
+  }
+
 
           if (updated) {
             await pool.query(`

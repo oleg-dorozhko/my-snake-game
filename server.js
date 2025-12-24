@@ -165,7 +165,6 @@ app.post('/join', async (req, res) => {
   }
 });
 
-// Функція для генерації HTML-сторінки з даними гравця
 function generatePlayerPage(player, isNew) {
   const welcomeMsg = isNew 
     ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія готова до пригод!</h2>`
@@ -180,81 +179,88 @@ function generatePlayerPage(player, isNew) {
       <title>Водяна Змія</title>
       <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 50px; background: #001f3f; color: #fff; }
-        .card { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 400px; }
+        .card { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 400px; margin: 10px auto; }
         h1 { color: #7fffd4; }
+        #current-depth { font-size: 1.5em; font-weight: bold; color: #7fffd4; }
       </style>
     </head>
     <body>
       <h1>🐍 Водяна Змія</h1>
       ${welcomeMsg}
+
       <div class="card">
         <p><strong>Луска:</strong> ${player.scales.toFixed(1)}</p>
         <p><strong>Втрачено луски:</strong> ${player.lost_scales}</p>
         <p><strong>Монети:</strong> ${player.coins}</p>
-        <p><strong>Статус:</strong> ${player.alive ? 'Жива' : 'Зникла'}</p>
+        <p><strong>Статус:</strong> ${player.alive ? 'Жива 🐉' : 'Зникла 💀'}</p>
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
+
+      <div class="card" style="background: rgba(0, 100, 200, 0.2);">
+        <h3 style="color: #7fffd4;">🌊 Глобальний потік океану (реальний час)</h3>
+        <p><strong>Поточна глибина:</strong> <span id="current-depth">500</span> м</p>
+        <p><strong>Серверний час:</strong> <span id="server-time">--</span></p>
+        <p><strong>Останнє оновлення:</strong> <span id="last-update">--</span></p>
+        <p style="font-size: 0.9em; color: #aaa;">
+          Наступна зміна — приблизно через <span id="countdown">30</span> секунд
+        </p>
+      </div>
+
+      <!-- Socket.io клієнтська бібліотека -->
+      <script src="/socket.io/socket.io.js"></script>
+      <script>
+        const socket = io();
+
+        // Форматування дати в українському стилі
+        function formatDate(isoString) {
+          if (!isoString) return '--';
+          return new Date(isoString).toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev',
+            hour12: false,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
+        }
+
+        // Коли приходить оновлення глибини від сервера
+        socket.on('depth_update', (data) => {
+          document.getElementById('current-depth').textContent = Math.round(data.depth);
+          document.getElementById('server-time').textContent = formatDate(data.serverTime);
+          document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+          
+          // Скидаємо відлік до 30
+          countdownValue = 30;
+          document.getElementById('countdown').textContent = countdownValue;
+        });
+
+        // Зворотний відлік кожну секунду
+        let countdownValue = 30;
+        setInterval(() => {
+          countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
+          document.getElementById('countdown').textContent = countdownValue;
+        }, 1000);
+
+        // Оновлення поточного часу кожну секунду (на випадок затримки)
+        setInterval(() => {
+          document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev',
+            hour12: false
+          });
+        }, 1000);
+
+        // При підключенні
+        socket.on('connect', () => {
+          console.log('✅ Підключено до сервера в реальному часі');
+        });
+      </script>
+
       <br>
-
-      <div class="card" style="margin-top: 20px; background: rgba(0, 100, 200, 0.2);">
-  <h3 style="color: #7fffd4;">🌊 Глобальний потік океану</h3>
-  <p><strong>Поточна глибина:</strong> <span id="current-depth">завантажується...</span> м</p>
-  <p><strong>Серверний час:</strong> <span id="server-time">завантажується...</span></p>
-  <p><strong>Останнє оновлення глибини:</strong> <span id="last-update">завантажується...</span></p>
-  <p style="font-size: 0.9em; color: #aaa;">Наступна зміна — приблизно через <span id="countdown">30</span> сек</p>
-</div>
-
-<script>
-  function updateStatus() {
-    fetch('/api/status')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('current-depth').textContent = Math.round(data.depth);
-        document.getElementById('server-time').textContent = data.serverTime;
-        document.getElementById('last-update').textContent = data.lastUpdate;
-
-        // Простий countdown до наступної зміни (кожні 30 сек)
-        const now = new Date(data.rawNow);
-        const secondsSinceUpdate = Math.floor((now - new Date(data.lastUpdate)) / 1000);
-        const nextIn = 30 - (secondsSinceUpdate % 30);
-        document.getElementById('countdown').textContent = nextIn;
-      })
-      .catch(err => {
-        document.getElementById('current-depth').textContent = 'помилка';
-        document.getElementById('server-time').textContent = 'помилка';
-      });
-  }
-
-  // Оновлюємо відразу і кожні 2 секунди (щоб countdown рухався плавно)
-  updateStatus();
-  setInterval(updateStatus, 2000);
-</script>
-<br>
-      <div class="card" style="margin-top: 20px;">
-  <h3 style="color: #7fffd4;">🌊 Глобальний потік</h3>
-  <p><strong>Поточна глибина:</strong> <span id="current-depth">завантажується...</span> м</p>
-</div>
-
-<script>
-  function updateDepth() {
-    fetch('/api/depth')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('current-depth').textContent = data.depth.toFixed(0);
-      })
-      .catch(err => {
-        document.getElementById('current-depth').textContent = 'помилка';
-      });
-  }
-
-  // Оновлюємо відразу і кожні 5 секунд (щоб бачити зміни швидко)
-  updateDepth();
-  setInterval(updateDepth, 5000);
-</script>
-      <br>
-      <a href="/">Змінити ім'я (увійти як інший гравець)</a>
+      <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>
     </body>
     </html>
   `;
 }
-

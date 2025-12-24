@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Водяна Змія — Вхід</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      margin: 100px; 
+      background: #001f3f; 
+      color: #fff; 
+    }
+    input { padding: 15px; font-size: 18px; width: 300px; border-radius: 10px; border: none; }
+    button { padding: 15px 30px; font-size: 18px; background: #7fffd4; border: none; border-radius: 10px; cursor: pointer; margin-top: 20px; }
+    h1 { color: #7fffd4; }
+  </style>
+</head>
+<body>
+  <h1>🐍 Водяна Змія</h1>
+  <h2>Гравець, скажи ім'я</h2>
+  <form action="/join" method="POST">
+    <input type="text" name="username" placeholder="Введи своє ім'я" required autocomplete="off" maxlength="20">
+    <br>
+    <button type="submit">Увійти в гру</button>
+  </form>
+</body>
+</html>

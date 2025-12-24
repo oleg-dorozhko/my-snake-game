@@ -289,66 +289,65 @@ function generatePlayerPage(player, isNew) {
       </div>
 
       <script src="/socket.io/socket.io.js"></script>
-      <script>
-        const socket = io();
-        const username = "${player.username}";  // передаємо ім'я гравця в клієнт
+      
+<script>
+  const socket = io();
+  const username = "${player.username}";
 
-        function formatDate(isoString) {
-          if (!isoString) return '--';
-          return new Date(isoString).toLocaleString('uk-UA', {
-            timeZone: 'Europe/Kiev',
-            hour12: false,
-            year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit'
-          });
-        }
+  function formatDate(isoString) {
+    if (!isoString) return '--';
+    return new Date(isoString).toLocaleString('uk-UA', {
+      timeZone: 'Europe/Kiev',
+      hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
 
-        socket.on('depth_update', (data) => {
-          document.getElementById('current-depth').textContent = Math.round(data.depth);
-          document.getElementById('server-time').textContent = formatDate(data.serverTime);
-          document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
-          countdownValue = 30;
-          document.getElementById('countdown').textContent = countdownValue;
-        });
+  socket.on('depth_update', (data) => {
+    document.getElementById('current-depth').textContent = Math.round(data.depth);
+    document.getElementById('server-time').textContent = formatDate(data.serverTime);
+    document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+    countdownValue = 30;
+    document.getElementById('countdown').textContent = countdownValue;
+  });
 
-        socket.on('players_updated', (players) => {
-          players.forEach(p => {
-            if (p.username === username) {
-              document.querySelector('.scales').innerHTML = `<strong>Луска:</strong> ${p.scales.toFixed(1)} ${p.alive ? '' : '💀'}`;
-              document.querySelector('.lost').innerHTML = `<strong>Втрачено луски:</strong> ${p.lost_scales}`;
-              document.querySelector('.coins').innerHTML = `<strong>Монети:</strong> ${p.coins} 🪙`;
-              document.querySelector('.status').innerHTML = `<strong>Статус:</strong> ${p.alive ? 'Жива 🐉' : 'Зникла 💀'}`;
+  socket.on('players_updated', (players) => {
+    players.forEach(p => {
+      if (p.username === username) {
+        document.querySelector('.scales').innerHTML = `<strong>Луска:</strong> ${p.scales.toFixed(1)} ${p.alive ? '' : '💀'}`;
+        document.querySelector('.lost').innerHTML = `<strong>Втрачено луски:</strong> ${p.lost_scales}`;
+        document.querySelector('.coins').innerHTML = `<strong>Монети:</strong> ${p.coins} 🪙`;
+        document.querySelector('.status').innerHTML = `<strong>Статус:</strong> ${p.alive ? 'Жива 🐉' : 'Зникла 💀'}`;
 
-              // Сповіщення про дію
-              const notification = document.createElement('div');
-              notification.className = 'notification';
-              notification.textContent = '➤ ' + p.action;
-              document.getElementById('player-card').appendChild(notification);
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.textContent = '➤ ' + p.action;
+        document.getElementById('player-card').appendChild(notification);
 
-              // Автоматично ховаємо через 10 сек
-              setTimeout(() => {
-                if (notification.parentNode) notification.remove();
-              }, 10000);
-            }
-          });
-        });
+        setTimeout(() => {
+          if (notification.parentNode) notification.remove();
+        }, 10000);
+      }
+    });
+  });
 
-        let countdownValue = 30;
-        setInterval(() => {
-          countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
-          document.getElementById('countdown').textContent = countdownValue;
-        }, 1000);
+  let countdownValue = 30;
+  setInterval(() => {
+    countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
+    document.getElementById('countdown').textContent = countdownValue;
+  }, 1000);
 
-        setInterval(() => {
-          document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
-            timeZone: 'Europe/Kiev', hour12: false
-          });
-        }, 1000);
+  setInterval(() => {
+    document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
+      timeZone: 'Europe/Kiev', hour12: false
+    });
+  }, 1000);
 
-        socket.on('connect', () => {
-          console.log('✅ Підключено до сервера в реальному часі');
-        });
-      </script>
+  socket.on('connect', () => {
+    console.log('✅ Підключено до сервера в реальному часі');
+  });
+</script>
 
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>

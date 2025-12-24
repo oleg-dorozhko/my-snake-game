@@ -196,7 +196,27 @@ function generatePlayerPage(player, isNew) {
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
       <br>
-      <p>Глобальний потік глибини: <strong>ще не запущений</strong> (буде в наступній версії)</p>
+      <div class="card" style="margin-top: 20px;">
+  <h3 style="color: #7fffd4;">🌊 Глобальний потік</h3>
+  <p><strong>Поточна глибина:</strong> <span id="current-depth">завантажується...</span> м</p>
+</div>
+
+<script>
+  function updateDepth() {
+    fetch('/api/depth')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('current-depth').textContent = data.depth.toFixed(0);
+      })
+      .catch(err => {
+        document.getElementById('current-depth').textContent = 'помилка';
+      });
+  }
+
+  // Оновлюємо відразу і кожні 5 секунд (щоб бачити зміни швидко)
+  updateDepth();
+  setInterval(updateDepth, 5000);
+</script>
       <br>
       <a href="/">Змінити ім'я (увійти як інший гравець)</a>
     </body>

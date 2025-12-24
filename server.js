@@ -245,12 +245,12 @@ app.post('/join', async (req, res) => {
     res.send('<h2>Помилка бази даних. Спробуйте пізніше.</h2>');
   }
 });
-
 function generatePlayerPage(player, isNew) {
   const welcomeMsg = isNew 
     ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія готова до пригод!</h2>`
     : `<h2>З поверненням, ${player.username}!</h2>`;
 
+  // Важливо: весь клієнтський скрипт у лапках, як рядок!
   return `
     <!DOCTYPE html>
     <html lang="uk">
@@ -263,17 +263,18 @@ function generatePlayerPage(player, isNew) {
         .card { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 400px; margin: 10px auto; }
         h1 { color: #7fffd4; }
         #current-depth { font-size: 1.5em; font-weight: bold; color: #7fffd4; }
+        .notification { color: #7fffd4; font-style: italic; margin-top: 10px; }
       </style>
     </head>
     <body>
       <h1>🐍 Водяна Змія</h1>
       ${welcomeMsg}
 
-      <div class="card">
-        <p><strong>Луска:</strong> ${player.scales.toFixed(1)}</p>
-        <p><strong>Втрачено луски:</strong> ${player.lost_scales}</p>
-        <p><strong>Монети:</strong> ${player.coins}</p>
-        <p><strong>Статус:</strong> ${player.alive ? 'Жива 🐉' : 'Зникла 💀'}</p>
+      <div class="card" id="player-card">
+        <p class="scales"><strong>Луска:</strong> ${player.scales.toFixed(1)}</p>
+        <p class="lost"><strong>Втрачено луски:</strong> ${player.lost_scales}</p>
+        <p class="coins"><strong>Монети:</strong> ${player.coins} 🪙</p>
+        <p class="status"><strong>Статус:</strong> ${player.alive ? 'Жива 🐉' : 'Зникла 💀'}</p>
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
 
@@ -287,72 +288,67 @@ function generatePlayerPage(player, isNew) {
         </p>
       </div>
 
-      <!-- Socket.io клієнтська бібліотека -->
       <script src="/socket.io/socket.io.js"></script>
-<script>
-  const socket = io();
-  const playerId = null; // поки що не використовуємо, але можна додати
+      <script>
+        const socket = io();
+        const username = "${player.username}";  // передаємо ім'я гравця в клієнт
 
-  function formatDate(isoString) {
-    if (!isoString) return '--';
-    return new Date(isoString).toLocaleString('uk-UA', {
-      timeZone: 'Europe/Kiev',
-      hour12: false,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    });
-  }
+        function formatDate(isoString) {
+          if (!isoString) return '--';
+          return new Date(isoString).toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev',
+            hour12: false,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          });
+        }
 
-  // Оновлення глибини
-  socket.on('depth_update', (data) => {
-    document.getElementById('current-depth').textContent = Math.round(data.depth);
-    document.getElementById('server-time').textContent = formatDate(data.serverTime);
-    document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
-    countdownValue = 30;
-    document.getElementById('countdown').textContent = countdownValue;
-  });
+        socket.on('depth_update', (data) => {
+          document.getElementById('current-depth').textContent = Math.round(data.depth);
+          document.getElementById('server-time').textContent = formatDate(data.serverTime);
+          document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+          countdownValue = 30;
+          document.getElementById('countdown').textContent = countdownValue;
+        });
 
-  // Оновлення статусу гравця (може бути свій або чужий)
-  socket.on('players_updated', (players) => {
-    players.forEach(p => {
-      if (p.username === "${player.username}") {  // твоя змія
-        document.querySelector('p:nth-child(1)').innerHTML = `<strong>Луска:</strong> ${p.scales.toFixed(1)} ${p.alive ? '' : '💀'}`;
-        document.querySelector('p:nth-child(2)').innerHTML = `<strong>Втрачено луски:</strong> ${p.lost_scales}`;
-        document.querySelector('p:nth-child(3)').innerHTML = `<strong>Монети:</strong> ${p.coins} 🪙`;
-        document.querySelector('p:nth-child(4)').innerHTML = `<strong>Статус:</strong> ${p.alive ? 'Жива 🐉' : 'Зникла 💀'}`;
+        socket.on('players_updated', (players) => {
+          players.forEach(p => {
+            if (p.username === username) {
+              document.querySelector('.scales').innerHTML = `<strong>Луска:</strong> ${p.scales.toFixed(1)} ${p.alive ? '' : '💀'}`;
+              document.querySelector('.lost').innerHTML = `<strong>Втрачено луски:</strong> ${p.lost_scales}`;
+              document.querySelector('.coins').innerHTML = `<strong>Монети:</strong> ${p.coins} 🪙`;
+              document.querySelector('.status').innerHTML = `<strong>Статус:</strong> ${p.alive ? 'Жива 🐉' : 'Зникла 💀'}`;
 
-        // Додаємо сповіщення про дію
-        const notification = document.createElement('div');
-        notification.style.color = '#7fffd4';
-        notification.style.fontStyle = 'italic';
-        notification.style.marginTop = '10px';
-        notification.textContent = '➤ ' + p.action;
-        const card = document.querySelector('.card');
-        card.appendChild(notification);
+              // Сповіщення про дію
+              const notification = document.createElement('div');
+              notification.className = 'notification';
+              notification.textContent = '➤ ' + p.action;
+              document.getElementById('player-card').appendChild(notification);
 
-        // Видаляємо старе сповіщення, якщо є
-        setTimeout(() => notification.remove(), 10000);
-      }
-    });
-  });
+              // Автоматично ховаємо через 10 сек
+              setTimeout(() => {
+                if (notification.parentNode) notification.remove();
+              }, 10000);
+            }
+          });
+        });
 
-  // Зворотний відлік і час
-  let countdownValue = 30;
-  setInterval(() => {
-    countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
-    document.getElementById('countdown').textContent = countdownValue;
-  }, 1000);
+        let countdownValue = 30;
+        setInterval(() => {
+          countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
+          document.getElementById('countdown').textContent = countdownValue;
+        }, 1000);
 
-  setInterval(() => {
-    document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
-      timeZone: 'Europe/Kiev', hour12: false
-    });
-  }, 1000);
+        setInterval(() => {
+          document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
+            timeZone: 'Europe/Kiev', hour12: false
+          });
+        }, 1000);
 
-  socket.on('connect', () => {
-    console.log('✅ Підключено до сервера в реальному часі');
-  });
-</script>
+        socket.on('connect', () => {
+          console.log('✅ Підключено до сервера в реальному часі');
+        });
+      </script>
 
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>
@@ -360,3 +356,4 @@ function generatePlayerPage(player, isNew) {
     </html>
   `;
 }
+

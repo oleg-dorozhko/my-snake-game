@@ -110,9 +110,14 @@ checkDatabaseConnection()
         for (let player of playersResult.rows) {
           let updated = false;
           let actionLog = `${player.username}: `;
-          
-         // === СПОЧАТКУ Резвитися (втрата луски при підйомі) ===
-  if (player.last_loss_depth && 
+           // === Ініціалізація last_loss_depth якщо луска повна ===
+  if (player.scales >= 50 && !player.last_loss_depth) {
+    player.last_loss_depth = newDepth;
+    updated = true;
+    actionLog += `луска повна, готова до пригод на глибині ${Math.round(newDepth)}м `;
+  }
+  // === Резвитися (втрата луски при підйомі) ===
+  else if (player.last_loss_depth && 
       newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
     
     player.scales -= 1;

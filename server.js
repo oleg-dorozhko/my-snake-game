@@ -15,18 +15,17 @@ const pool = new Pool({
 async function checkDatabaseConnection() {
   try {
     const client = await pool.connect();
-    client.release(); // звільняємо клієнта назад у пул
+    client.release();
     console.log('🐘 Конекшн з БД успішний');
   } catch (err) {
     console.error('❌ Помилка підключення до БД:', err.message);
-    process.exit(1); // зупиняємо сервер, якщо БД недоступна
+    process.exit(1);
   }
 }
 
-// Викликаємо перевірку перед запуском сервера
+// Викликаємо перевірку і тільки після успіху запускаємо сервер
 checkDatabaseConnection()
   .then(() => {
-    // Ініціалізація таблиці (якщо ще немає)
     return pool.query(`
       CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
@@ -47,7 +46,7 @@ checkDatabaseConnection()
   .then(() => {
     console.log('📊 Таблиця players готова або вже існує');
     
-    // Запускаємо сервер тільки після успішної перевірки БД
+    // === ТУТ ЄДИНИЙ І ПРАВИЛЬНИЙ ЗАПУСК СЕРВЕРА ===
     app.listen(port, () => {
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
@@ -55,16 +54,17 @@ checkDatabaseConnection()
   })
   .catch(err => {
     console.error('Помилка ініціалізації:', err);
+    process.exit(1);
   });
 
-// Статичні файли (HTML, CSS, JS)
+// Статичні файли та роути — залишаються тут (виконуються відразу, це нормально)
 app.use(express.static('public'));
-app.use(express.urlencoded({ extended: true })); // для обробки форм
+app.use(express.urlencoded({ extended: true }));
 
-// Головна сторінка — форма вводу імені
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
 
 // Обробка введення імені
 app.post('/join', async (req, res) => {
@@ -142,8 +142,3 @@ function generatePlayerPage(player, isNew) {
   `;
 }
 
-
-app.listen(port, () => {
-  console.log(`Сервер запущено на порту ${port}`);
-  console.log(`Відкрий: https://твій-сервіс.onrender.com`);
-});

@@ -11,6 +11,52 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
+// === Перевірка підключення до БД при старті ===
+async function checkDatabaseConnection() {
+  try {
+    const client = await pool.connect();
+    client.release(); // звільняємо клієнта назад у пул
+    console.log('🐘 Конекшн з БД успішний');
+  } catch (err) {
+    console.error('❌ Помилка підключення до БД:', err.message);
+    process.exit(1); // зупиняємо сервер, якщо БД недоступна
+  }
+}
+
+// Викликаємо перевірку перед запуском сервера
+checkDatabaseConnection()
+  .then(() => {
+    // Ініціалізація таблиці (якщо ще немає)
+    return pool.query(`
+      CREATE TABLE IF NOT EXISTS players (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        scales FLOAT DEFAULT 50,
+        lost_scales INTEGER DEFAULT 0,
+        coins INTEGER DEFAULT 0,
+        last_loss_depth FLOAT,
+        alive BOOLEAN DEFAULT TRUE,
+        start_time TIMESTAMP DEFAULT NOW(),
+        death_time TIMESTAMP,
+        eat_threshold FLOAT DEFAULT 0.005,
+        play_threshold FLOAT DEFAULT 0.05,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+  })
+  .then(() => {
+    console.log('📊 Таблиця players готова або вже існує');
+    
+    // Запускаємо сервер тільки після успішної перевірки БД
+    app.listen(port, () => {
+      console.log(`🚀 Сервер запущено на порту ${port}`);
+      console.log(`Відкрий: https://твій-сервіс.onrender.com`);
+    });
+  })
+  .catch(err => {
+    console.error('Помилка ініціалізації:', err);
+  });
+
 // Статичні файли (HTML, CSS, JS)
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true })); // для обробки форм
@@ -96,27 +142,6 @@ function generatePlayerPage(player, isNew) {
   `;
 }
 
-// Ініціалізація таблиці при першому запуску
-pool.query(`
-  CREATE TABLE IF NOT EXISTS players (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    scales FLOAT DEFAULT 50,
-    lost_scales INTEGER DEFAULT 0,
-    coins INTEGER DEFAULT 0,
-    last_loss_depth FLOAT,
-    alive BOOLEAN DEFAULT TRUE,
-    start_time TIMESTAMP DEFAULT NOW(),
-    death_time TIMESTAMP,
-    eat_threshold FLOAT DEFAULT 0.005,
-    play_threshold FLOAT DEFAULT 0.05,
-    created_at TIMESTAMP DEFAULT NOW()
-  )
-`).then(() => {
-  console.log('Таблиця players готова або вже існує');
-}).catch(err => {
-  console.error('Помилка створення таблиці:', err);
-});
 
 app.listen(port, () => {
   console.log(`Сервер запущено на порту ${port}`);

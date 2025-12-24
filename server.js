@@ -110,36 +110,36 @@ checkDatabaseConnection()
         for (let player of playersResult.rows) {
           let updated = false;
           let actionLog = `${player.username}: `;
+          
+          // === Їсти (тільки якщо НЕ резвився цього тику і є умови) ===
+else if (player.scales < 50 &&
+         player.last_loss_depth &&
+         newDepth >= player.last_loss_depth * (1 + player.eat_threshold)) {
+  
+  const bonus = (newDepth - player.last_loss_depth) / player.last_loss_depth;
+  player.scales += 1 + bonus;
+  updated = true;
+  actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
+}
 
           // === Резвитися ===
-          if (player.last_loss_depth && 
-              (newDepth / player.last_loss_depth) >= player.play_threshold) {
-            
-            player.scales -= 1;
-            player.lost_scales += 1;
-            player.coins += 1;
-            player.last_loss_depth = newDepth;
-            updated = true;
-            actionLog += `резвився (-1 луска, +1 монета) `;
-
-            if (player.scales <= 0) {
-              player.scales = 0;
-              player.alive = false;
-              player.death_time = new Date();
-              actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
-            }
-          }
-          // === Їсти (тільки якщо НЕ резвився цього тику і є умови) ===
-          else if (player.scales < 50 &&
-                   player.last_loss_depth &&
-                   newDepth > player.last_loss_depth &&
-                   (player.last_loss_depth / newDepth) >= player.eat_threshold) {
-            
-            const bonus = player.last_loss_depth / newDepth;
-            player.scales += 1 + bonus;
-            updated = true;
-            actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
-          }
+if (player.last_loss_depth && 
+    newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
+  
+  player.scales -= 1;
+  player.lost_scales += 1;
+  player.coins += 1;
+  player.last_loss_depth = newDepth;
+  updated = true;
+  actionLog += `резвився (-1 луска, +1 монета) `;
+  
+  if (player.scales <= 0) {
+    player.scales = 0;
+    player.alive = false;
+    player.death_time = new Date();
+    actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+  }
+}
 
           if (updated) {
             await pool.query(`
@@ -211,7 +211,7 @@ app.get('/', (req, res) => {
 // Обробка введення імені
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();
-
+  const startDepth = 500;
   if (!username || username.length < 2 || username.length > 20) {
     return res.send(`
       <h2>Помилка: Ім'я має бути від 2 до 20 символів</h2>
@@ -233,9 +233,10 @@ app.post('/join', async (req, res) => {
       result = await pool.query(`
         INSERT INTO players 
         (username, scales, lost_scales, coins, last_loss_depth, alive, start_time)
-        VALUES ($1, 50, 0, 0, NULL, true, NOW())
+        VALUES ($1, 50, 0, 0, $2, true, NOW())
         RETURNING *
-      `, [username]);
+      `, [username, startDepth]);  // <-- Додайте startDepth як $2
+      
 
       const newPlayer = result.rows[0];
       res.send(generatePlayerPage(newPlayer, true));

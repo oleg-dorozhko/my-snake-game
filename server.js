@@ -113,6 +113,20 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// API для отримання поточної глибини
+app.get('/api/depth', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT current_depth FROM game_state WHERE id = 1');
+    if (result.rows.length > 0) {
+      res.json({ depth: result.rows[0].current_depth });
+    } else {
+      res.status(500).json({ error: 'Глибина не ініціалізована' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
+});
 
 // Обробка введення імені
 app.post('/join', async (req, res) => {

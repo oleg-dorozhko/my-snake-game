@@ -127,7 +127,39 @@ app.get('/api/depth', async (req, res) => {
     res.status(500).json({ error: 'Помилка сервера' });
   }
 });
+// API для отримання глибини + поточного серверного часу + часу останнього оновлення
+app.get('/api/status', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT current_depth, last_update 
+      FROM game_state 
+      WHERE id = 1
+    `);
 
+    if (result.rows.length === 0) {
+      return res.status(500).json({ error: 'Game state not initialized' });
+    }
+
+    const { current_depth, last_update } = result.rows[0];
+    const now = new Date();
+
+    res.json({
+      depth: current_depth,
+      serverTime: now.toLocaleString('uk-UA', { 
+        timeZone: 'Europe/Kiev',
+        hour12: false 
+      }),
+      lastUpdate: new Date(last_update).toLocaleString('uk-UA', { 
+        timeZone: 'Europe/Kiev',
+        hour12: false 
+      }),
+      rawNow: now // для точних розрахунків, якщо знадобиться
+    });
+  } catch (err) {
+    console.error('Помилка /api/status:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 // Обробка введення імені
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();
@@ -196,6 +228,41 @@ function generatePlayerPage(player, isNew) {
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
       <br>
+
+      <div class="card" style="margin-top: 20px; background: rgba(0, 100, 200, 0.2);">
+  <h3 style="color: #7fffd4;">🌊 Глобальний потік океану</h3>
+  <p><strong>Поточна глибина:</strong> <span id="current-depth">завантажується...</span> м</p>
+  <p><strong>Серверний час:</strong> <span id="server-time">завантажується...</span></p>
+  <p><strong>Останнє оновлення глибини:</strong> <span id="last-update">завантажується...</span></p>
+  <p style="font-size: 0.9em; color: #aaa;">Наступна зміна — приблизно через <span id="countdown">30</span> сек</p>
+</div>
+
+<script>
+  function updateStatus() {
+    fetch('/api/status')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('current-depth').textContent = Math.round(data.depth);
+        document.getElementById('server-time').textContent = data.serverTime;
+        document.getElementById('last-update').textContent = data.lastUpdate;
+
+        // Простий countdown до наступної зміни (кожні 30 сек)
+        const now = new Date(data.rawNow);
+        const secondsSinceUpdate = Math.floor((now - new Date(data.lastUpdate)) / 1000);
+        const nextIn = 30 - (secondsSinceUpdate % 30);
+        document.getElementById('countdown').textContent = nextIn;
+      })
+      .catch(err => {
+        document.getElementById('current-depth').textContent = 'помилка';
+        document.getElementById('server-time').textContent = 'помилка';
+      });
+  }
+
+  // Оновлюємо відразу і кожні 2 секунди (щоб countdown рухався плавно)
+  updateStatus();
+  setInterval(updateStatus, 2000);
+</script>
+<br>
       <div class="card" style="margin-top: 20px;">
   <h3 style="color: #7fffd4;">🌊 Глобальний потік</h3>
   <p><strong>Поточна глибина:</strong> <span id="current-depth">завантажується...</span> м</p>

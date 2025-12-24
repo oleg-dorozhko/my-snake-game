@@ -26,6 +26,7 @@ async function checkDatabaseConnection() {
 // Викликаємо перевірку і тільки після успіху запускаємо сервер
 checkDatabaseConnection()
   .then(() => {
+    // Створюємо таблицю players
     return pool.query(`
       CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
@@ -45,15 +46,62 @@ checkDatabaseConnection()
   })
   .then(() => {
     console.log('📊 Таблиця players готова або вже існує');
-    
-    // === ТУТ ЄДИНИЙ І ПРАВИЛЬНИЙ ЗАПУСК СЕРВЕРА ===
+
+    // Створюємо таблицю game_state
+    return pool.query(`
+      CREATE TABLE IF NOT EXISTS game_state (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        current_depth FLOAT DEFAULT 500,
+        last_update TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT one_row CHECK (id = 1)
+      )
+    `);
+  })
+  .then(() => {
+    console.log('🌊 Таблиця game_state готова або вже існує');
+
+    // Ініціалізуємо рядок з глибиною, якщо його ще немає
+    return pool.query(`
+      INSERT INTO game_state (id, current_depth)
+      VALUES (1, 500)
+      ON CONFLICT (id) DO NOTHING
+    `);
+  })
+  .then(() => {
+    console.log('🌊 Глобальна глибина ініціалізована (500 м)');
+
+    // === ТЕПЕР ЗАПУСКАЄМО СЕРВЕР ===
     app.listen(port, () => {
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
     });
+
+    // === Запускаємо зміну глибини кожні 30 секунд ===
+    setInterval(async () => {
+      try {
+        const rand = Math.random();
+        let depthChange = 0;
+        if (rand < 0.17) depthChange = 50;         // глибше
+        else if (rand < 0.34) depthChange = -50;   // вище
+        // інакше 66% — без змін
+
+        const result = await pool.query(`
+          UPDATE game_state 
+          SET current_depth = current_depth + $1,
+              last_update = NOW()
+          WHERE id = 1
+          RETURNING current_depth
+        `, [depthChange]);
+
+        const newDepth = result.rows[0].current_depth;
+        console.log(`🌊 Глибина оновлена: ${newDepth.toFixed(0)} м (зміна: ${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
+      } catch (err) {
+        console.error('Помилка оновлення глибини:', err);
+      }
+    }, 30000); // кожні 30 секунд
   })
   .catch(err => {
-    console.error('Помилка ініціалізації:', err);
+    console.error('Помилка ініціалізації бази даних:', err);
     process.exit(1);
   });
 

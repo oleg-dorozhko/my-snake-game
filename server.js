@@ -79,16 +79,16 @@ checkDatabaseConnection()
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
     });
-
-    // === Глобальний потік — зміна глибини кожні 30 сек + розсилка через Socket.io ===
+    // === Глобальний потік + логіка змії кожні 30 сек ===
     setInterval(async () => {
       try {
+        // 1. Оновлюємо глибину
         const rand = Math.random();
         let depthChange = 0;
         if (rand < 0.17) depthChange = 50;
         else if (rand < 0.34) depthChange = -50;
 
-        const result = await pool.query(`
+        const depthResult = await pool.query(`
           UPDATE game_state 
           SET current_depth = current_depth + $1,
               last_update = NOW()
@@ -96,21 +96,102 @@ checkDatabaseConnection()
           RETURNING current_depth, last_update
         `, [depthChange]);
 
-        const { current_depth, last_update } = result.rows[0];
+        const { current_depth, last_update } = depthResult.rows[0];
+        const newDepth = current_depth;
 
-        console.log(`🌊 Глибина оновлена: ${Math.round(current_depth)} м (зміна: ${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
+        console.log(`🌊 Глибина оновлена: ${Math.round(newDepth)} м (зміна: ${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
 
-        // Розсилаємо всім підключеним клієнтам
+        // 2. Отримуємо всіх живих гравців
+        const playersResult = await pool.query(`
+          SELECT * FROM players WHERE alive = TRUE
+        `);
+        let updatedPlayers = [];
+
+        for (let player of playersResult.rows) {
+          let updated = false;
+          let actionLog = `${player.username}: `;
+
+          // === Резвитися ===
+          if (player.last_loss_depth && 
+              (newDepth / player.last_loss_depth) >= player.play_threshold) {
+            
+            player.scales -= 1;
+            player.lost_scales += 1;
+            player.coins += 1;
+            player.last_loss_depth = newDepth;
+            updated = true;
+            actionLog += `резвився (-1 луска, +1 монета) `;
+
+            if (player.scales <= 0) {
+              player.scales = 0;
+              player.alive = false;
+              player.death_time = new Date();
+              actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+            }
+          }
+          // === Їсти (тільки якщо НЕ резвився цього тику і є умови) ===
+          else if (player.scales < 50 &&
+                   player.last_loss_depth &&
+                   newDepth > player.last_loss_depth &&
+                   (player.last_loss_depth / newDepth) >= player.eat_threshold) {
+            
+            const bonus = player.last_loss_depth / newDepth;
+            player.scales += 1 + bonus;
+            updated = true;
+            actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
+          }
+
+          if (updated) {
+            await pool.query(`
+              UPDATE players 
+              SET scales = $1, 
+                  lost_scales = $2, 
+                  coins = $3, 
+                  last_loss_depth = $4,
+                  alive = $5,
+                  death_time = $6
+              WHERE id = $7
+            `, [
+              player.scales,
+              player.lost_scales,
+              player.coins,
+              player.last_loss_depth,
+              player.alive,
+              player.death_time,
+              player.id
+            ]);
+
+            updatedPlayers.push({
+              id: player.id,
+              username: player.username,
+              scales: parseFloat(player.scales.toFixed(2)),
+              lost_scales: player.lost_scales,
+              coins: player.coins,
+              alive: player.alive,
+              action: actionLog.trim()
+            });
+
+            console.log(`🐍 ${actionLog.trim()}`);
+          }
+        }
+
+        // 3. Розсилаємо оновлення всім клієнтам
         io.emit('depth_update', {
-          depth: current_depth,
+          depth: newDepth,
           lastUpdate: last_update.toISOString(),
           serverTime: new Date().toISOString()
         });
 
+        if (updatedPlayers.length > 0) {
+          io.emit('players_updated', updatedPlayers);
+          console.log(`📢 Оновлено ${updatedPlayers.length} змій`);
+        }
+
       } catch (err) {
-        console.error('Помилка оновлення глибини:', err);
+        console.error('Помилка в циклі гри:', err);
       }
     }, 30000);
+    
 
   })
   .catch(err => {
@@ -208,55 +289,70 @@ function generatePlayerPage(player, isNew) {
 
       <!-- Socket.io клієнтська бібліотека -->
       <script src="/socket.io/socket.io.js"></script>
-      <script>
-        const socket = io();
+<script>
+  const socket = io();
+  const playerId = null; // поки що не використовуємо, але можна додати
 
-        // Форматування дати в українському стилі
-        function formatDate(isoString) {
-          if (!isoString) return '--';
-          return new Date(isoString).toLocaleString('uk-UA', {
-            timeZone: 'Europe/Kiev',
-            hour12: false,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          });
-        }
+  function formatDate(isoString) {
+    if (!isoString) return '--';
+    return new Date(isoString).toLocaleString('uk-UA', {
+      timeZone: 'Europe/Kiev',
+      hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
 
-        // Коли приходить оновлення глибини від сервера
-        socket.on('depth_update', (data) => {
-          document.getElementById('current-depth').textContent = Math.round(data.depth);
-          document.getElementById('server-time').textContent = formatDate(data.serverTime);
-          document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
-          
-          // Скидаємо відлік до 30
-          countdownValue = 30;
-          document.getElementById('countdown').textContent = countdownValue;
-        });
+  // Оновлення глибини
+  socket.on('depth_update', (data) => {
+    document.getElementById('current-depth').textContent = Math.round(data.depth);
+    document.getElementById('server-time').textContent = formatDate(data.serverTime);
+    document.getElementById('last-update').textContent = formatDate(data.lastUpdate);
+    countdownValue = 30;
+    document.getElementById('countdown').textContent = countdownValue;
+  });
 
-        // Зворотний відлік кожну секунду
-        let countdownValue = 30;
-        setInterval(() => {
-          countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
-          document.getElementById('countdown').textContent = countdownValue;
-        }, 1000);
+  // Оновлення статусу гравця (може бути свій або чужий)
+  socket.on('players_updated', (players) => {
+    players.forEach(p => {
+      if (p.username === "${player.username}") {  // твоя змія
+        document.querySelector('p:nth-child(1)').innerHTML = `<strong>Луска:</strong> ${p.scales.toFixed(1)} ${p.alive ? '' : '💀'}`;
+        document.querySelector('p:nth-child(2)').innerHTML = `<strong>Втрачено луски:</strong> ${p.lost_scales}`;
+        document.querySelector('p:nth-child(3)').innerHTML = `<strong>Монети:</strong> ${p.coins} 🪙`;
+        document.querySelector('p:nth-child(4)').innerHTML = `<strong>Статус:</strong> ${p.alive ? 'Жива 🐉' : 'Зникла 💀'}`;
 
-        // Оновлення поточного часу кожну секунду (на випадок затримки)
-        setInterval(() => {
-          document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
-            timeZone: 'Europe/Kiev',
-            hour12: false
-          });
-        }, 1000);
+        // Додаємо сповіщення про дію
+        const notification = document.createElement('div');
+        notification.style.color = '#7fffd4';
+        notification.style.fontStyle = 'italic';
+        notification.style.marginTop = '10px';
+        notification.textContent = '➤ ' + p.action;
+        const card = document.querySelector('.card');
+        card.appendChild(notification);
 
-        // При підключенні
-        socket.on('connect', () => {
-          console.log('✅ Підключено до сервера в реальному часі');
-        });
-      </script>
+        // Видаляємо старе сповіщення, якщо є
+        setTimeout(() => notification.remove(), 10000);
+      }
+    });
+  });
+
+  // Зворотний відлік і час
+  let countdownValue = 30;
+  setInterval(() => {
+    countdownValue = countdownValue <= 1 ? 30 : countdownValue - 1;
+    document.getElementById('countdown').textContent = countdownValue;
+  }, 1000);
+
+  setInterval(() => {
+    document.getElementById('server-time').textContent = new Date().toLocaleString('uk-UA', {
+      timeZone: 'Europe/Kiev', hour12: false
+    });
+  }, 1000);
+
+  socket.on('connect', () => {
+    console.log('✅ Підключено до сервера в реальному часі');
+  });
+</script>
 
       <br>
       <a href="/" style="color: #7fffd4; font-size: 1.1em;">← Змінити ім'я / Увійти як інший гравець</a>

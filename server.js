@@ -112,7 +112,7 @@ checkDatabaseConnection()
           let actionLog = `${player.username}: `;
           
           // === Їсти (тільки якщо НЕ резвився цього тику і є умови) ===
-else if (player.scales < 50 &&
+ if (player.scales < 50 &&
          player.last_loss_depth &&
          newDepth >= player.last_loss_depth * (1 + player.eat_threshold)) {
   
@@ -122,7 +122,7 @@ else if (player.scales < 50 &&
   actionLog += `їла (+1 + ${bonus.toFixed(3)} луски = +${(1 + bonus).toFixed(2)}) 🎣`;
 }
 
-          // === Резвитися ===
+else          // === Резвитися ===
 if (player.last_loss_depth && 
     newDepth <= player.last_loss_depth * (1 - player.play_threshold)) {
   

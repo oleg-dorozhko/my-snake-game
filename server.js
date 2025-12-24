@@ -500,11 +500,40 @@ function generatePlayerPage(player, isNew) {
   })
   .catch(err => {
     status.style.color = '#ff6b6b';
-    status.textContent = 'Помилка з\'єднання';
+    status.textContent = 'Помилка звязку';
     btn.disabled = false;
   });
 });
 
+document.getElementById('eat-btn').addEventListener('click', () => {
+  const btn = document.getElementById('eat-btn');
+  const status = document.getElementById('eat-status');
+  
+  btn.disabled = true;
+  status.textContent = 'Перевіряємо умови...';
+  
+  fetch('/eat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: username })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      status.style.color = '#7fffd4';
+      status.textContent = '✓ ' + data.message;
+    } else {
+      status.style.color = '#ff6b6b';
+      status.textContent = '✗ ' + data.message;
+    }
+    setTimeout(() => { btn.disabled = false; }, 2000);
+  })
+  .catch(err => {
+    status.style.color = '#ff6b6b';
+    status.textContent = 'Помилка звязку';
+    btn.disabled = false;
+  });
+});
       </script>
 
       <br>

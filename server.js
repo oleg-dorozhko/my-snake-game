@@ -226,6 +226,75 @@ app.get('/', (req, res) => {
 });
 app.use(express.json()); // Додати це перед роутами, якщо немає
 
+app.post('/eat', async (req, res) => {
+  const { username } = req.body;
+  
+  try {
+    const playerResult = await pool.query('SELECT * FROM players WHERE username = $1', [username]);
+    const depthResult = await pool.query('SELECT current_depth FROM game_state WHERE id = 1');
+    
+    if (playerResult.rows.length === 0) {
+      return res.json({ success: false, message: 'Гравця не знайдено' });
+    }
+    
+    const player = playerResult.rows[0];
+    const currentDepth = parseFloat(depthResult.rows[0].current_depth);
+    
+    // Перевірка умов
+    if (!player.alive) {
+      return res.json({ success: false, message: 'Змія мертва 💀' });
+    }
+    
+    if (player.scales >= 50) {
+      return res.json({ success: false, message: 'Луска вже повна (50/50)' });
+    }
+    
+    if (player.last_loss_depth === null) {
+      return res.json({ success: false, message: 'Спочатку треба погуляти' });
+    }
+    
+    const threshold = player.last_loss_depth * (1 + player.eat_threshold);
+    if (currentDepth < threshold) {
+      return res.json({ 
+        success: false, 
+        message: `Потрібно опуститися нижче (зараз ${Math.round(currentDepth)}м, треба ≥${Math.round(threshold)}м)` 
+      });
+    }
+    
+    // Виконуємо їжу
+    const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
+    const scaleGain = 1 + bonus;
+    const newScales = Math.min(50, parseFloat(player.scales) + scaleGain);
+    const isFullNow = newScales >= 50;
+    
+    await pool.query(`
+      UPDATE players 
+      SET scales = $1, 
+          last_loss_depth = CASE WHEN $2 THEN NULL ELSE last_loss_depth END
+      WHERE username = $3
+    `, [newScales, isFullNow, username]);
+    
+    // Повідомляємо всіх через Socket.io
+    io.emit('players_updated', [{
+      username: player.username,
+      scales: parseFloat(newScales.toFixed(2)),
+      lost_scales: player.lost_scales,
+      coins: player.coins,
+      alive: true,
+      action: `${username}: поїв вручну (+${scaleGain.toFixed(2)} луски)${isFullNow ? ' → луска повна!' : ''}`
+    }]);
+    
+    res.json({ 
+      success: true, 
+      message: `Смачно! +${scaleGain.toFixed(2)} луски 🎣${isFullNow ? ' Луска повна!' : ''}`
+    });
+    
+  } catch (err) {
+    console.error('Помилка в /eat:', err);
+    res.json({ success: false, message: 'Помилка сервера' });
+  }
+});
+
 app.post('/walk', async (req, res) => {
   const { username } = req.body;
   
@@ -398,6 +467,19 @@ function generatePlayerPage(player, isNew) {
   ">🚶 Гуляти</button>
   
   <p id="walk-status" style="font-size: 0.9em; color: #aaa; margin-top: 10px;"></p>
+  <button id="eat-btn" style="
+  margin-top: 15px;
+  margin-left: 10px;
+  padding: 10px 20px;
+  background: #ff6b9d;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1em;
+  cursor: pointer;
+  font-weight: bold;
+">🍽️ Їсти</button>
+<p id="eat-status" style="font-size: 0.9em; color: #aaa; margin-top: 5px;"></p>
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
 

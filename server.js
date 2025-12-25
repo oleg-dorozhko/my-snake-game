@@ -107,60 +107,51 @@ checkDatabaseConnection()
           SELECT * FROM players WHERE alive = TRUE
         `);
         let updatedPlayers = [];
-
-        for (let player of playersResult.rows) {
+        for (let row of playersResult.rows) {
+          let player = { ...row }; // Копіюємо, щоб не мутувати оригінал
           let updated = false;
           let actionLog = `${player.username}: `;
-          
-          // Конвертуємо в числа для точності
-          const scales = parseFloat(player.scales);
-          const lostScales = parseInt(player.lost_scales);
-          const coins = parseInt(player.coins);
+
+          // Конвертуємо значення
+          let scales = parseFloat(player.scales);
+          let lostScales = parseInt(player.lost_scales || 0);
+          let coins = parseInt(player.coins || 0);
           let lastLossDepth = player.last_loss_depth ? parseFloat(player.last_loss_depth) : null;
 
-          // === Ініціалізація last_loss_depth якщо луска повна ===
-          if (scales >= 50 && lastLossDepth === null) {
-            lastLossDepth = newDepth;
+          const previousScales = scales; // для перевірки переходу через 50
+
+          // === КЛЮЧОВА ЛОГІКА: Резвитися, коли луска досягає ≥50 ===
+          if (scales >= 50 && (previousScales < 50 || lastLossDepth === null)) {
+            scales -= 1;
+            lostScales += 1;
+            coins += 1;
+            lastLossDepth = newDepth; // фіксуємо глибину, де стала повною
             updated = true;
-            actionLog += `луска повна, готова до пригод на глибині ${Math.round(newDepth)}м `;
-          }
-          // === Резвитися (втрата луски при підйомі) ===
-          else if (lastLossDepth !== null && 
-                   newDepth <= lastLossDepth * (1 - player.play_threshold)) {
-            
-            player.scales = scales - 1;
-            player.lost_scales = lostScales + 1;
-            player.coins = coins + 1;
-            player.last_loss_depth = newDepth;
-            updated = true;
-            actionLog += `резвився (-1 луска, +1 монета) `;
-            
-            if (player.scales <= 0) {
-              player.scales = 0;
+            actionLog += `резвився на глибині ${Math.round(newDepth)}м! (-1 луска, +1 монета) 🐍💦💰 `;
+
+            if (scales <= 0) {
+              scales = 0;
               player.alive = false;
               player.death_time = new Date();
-              actionLog += `→ ЗМІЯ ПОМЕРЛА 💀`;
+              actionLog += `→ ЗМІЯ ПОМЕРЛА ВІД ЗАДОВОЛЕННЯ 💀`;
             }
           }
-          // === Їсти (тільки якщо НЕ резвився цього тику) ===
-          else if (scales < 50 &&
-                   lastLossDepth !== null &&
-                   newDepth >= lastLossDepth * (1 + player.eat_threshold)) {
-            
+          // === Їсти: тільки якщо луска <50 і ми глибше, ніж остання точка резвіння ===
+          else if (scales < 50 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + player.eat_threshold)) {
             const bonus = (newDepth - lastLossDepth) / lastLossDepth;
-            const scaleGain = 1 + bonus;
-            player.scales = Math.min(50, scales + scaleGain); // Обмежуємо максимум 50
+            const scaleGain = 1 + bonus * 10; // можеш налаштувати силу бонусу
+            scales = Math.min(50, scales + scaleGain);
             updated = true;
-            actionLog += `їла (+${scaleGain.toFixed(2)} луски) 🎣`;
-            
-            // Скидаємо last_loss_depth коли луска повна
-            if (player.scales >= 50) {
-              player.last_loss_depth = null;
-              actionLog += ` → луска повна!`;
+            actionLog += `наїлася на глибині (+${scaleGain.toFixed(2)} луски) 🎣 `;
+
+            // Якщо знову досягли 50 — резвимося наступного тику (не в цьому ж)
+            if (scales >= 50) {
+              actionLog += `→ майже повна!`;
             }
           }
 
-          if (updated) {
+          // Зберігаємо зміни, якщо були
+          if (updated || previousScales !== scales) {
             await pool.query(`
               UPDATE players 
               SET scales = $1, 
@@ -171,28 +162,30 @@ checkDatabaseConnection()
                   death_time = $6
               WHERE id = $7
             `, [
-              player.scales,
-              player.lost_scales,
-              player.coins,
-              player.last_loss_depth,
-              player.alive,
-              player.death_time,
+              scales,
+              lostScales,
+              coins,
+              lastLossDepth,
+              scales > 0,
+              scales <= 0 ? new Date() : player.death_time,
               player.id
             ]);
 
             updatedPlayers.push({
               id: player.id,
               username: player.username,
-              scales: parseFloat(player.scales.toFixed(2)),
-              lost_scales: player.lost_scales,
-              coins: player.coins,
-              alive: player.alive,
+              scales: parseFloat(scales.toFixed(2)),
+              lost_scales: lostScales,
+              coins: coins,
+              alive: scales > 0,
               action: actionLog.trim()
             });
 
             console.log(`🐍 ${actionLog.trim()}`);
           }
         }
+       
+           
 
         // 3. Розсилаємо оновлення всім клієнтам
         io.emit('depth_update', {

@@ -348,14 +348,15 @@ function generatePage(player, isNew) {
       const socket = io();
       const username = "${player.username}";
 
-      socket.on('depth_update', d => {
-        document.getElementById('current-depth').textContent = Math.round(d.depth);
-        let c = 30;
-        const timer = setInterval(() => {
-          c = c <= 1 ? 30 : c - 1;
-          document.getElementById('countdown').textContent = c;
-        }, 1000);
-      });
+socket.on('depth_update', d => {
+  document.getElementById('current-depth').textContent = Math.round(d.depth);
+  let c = 10;  // ← Виправлено на 10
+  const timer = setInterval(() => {
+    c = c <= 1 ? 10 : c - 1;  // ← І тут теж 10
+    document.getElementById('countdown').textContent = c;
+  }, 1000);
+});
+      
 
       socket.on('players_updated', ps => {
         ps.forEach(p => {

@@ -71,7 +71,7 @@ resetAndInitDatabase()
       console.log(`🚀 Сервер запущено на порту ${port}`);
     });
 
-    // === Цикл гри кожні 30 секунд ===
+    // === Цикл гри кожні 10 секунд ===
     setInterval(async () => {
       try {
         const rand = Math.random();
@@ -159,7 +159,7 @@ resetAndInitDatabase()
       } catch (err) {
         console.error('Помилка в циклі гри:', err);
       }
-    }, 30000);
+    }, 10000);
   });
 
 // Middleware

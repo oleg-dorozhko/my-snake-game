@@ -19,9 +19,9 @@ const io = new Server(server, {
 
 async function resetAndInitDatabase() {
   try {
-    //console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
-    //await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
-    //await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
+    console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
+    await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
 
     console.log('🆕 Створюємо нові таблиці...');
 

@@ -203,7 +203,7 @@ app.post('/eat', async (req, res) => {
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     //if (player.pearls >= 50) return res.json({ success: false, message: 'Перлин повно (50/50)' });
-    if (player.last_loss_depth === null||player.lostPearls==0) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+    if (player.last_loss_depth === null||player.lost_pearls ==0) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
 
     const threshold = player.last_loss_depth * (1 + player.eat_threshold);
     if (currentDepth <= threshold) {
@@ -213,11 +213,11 @@ app.post('/eat', async (req, res) => {
     const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
     const gain = 1 + bonus;
     const newPearls = player.pearls + gain;
-    const newLostPearls = player.lostPearls - 1;
+    const newLostPearls = player.lost_pearls  - 1;
     
     // Update both pearls AND lostPearls
     await pool.query(
-      'UPDATE players SET pearls = $1, lostPearls = $2 WHERE username = $3', 
+      'UPDATE players SET pearls = $1, lost_pearls  = $2 WHERE username = $3', 
       [newPearls, newLostPearls, username]
     );
 

@@ -201,7 +201,7 @@ app.post('/eat', async (req, res) => {
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
-    if (player.pearls >= 50) return res.json({ success: false, message: 'Перлин повно (50/50)' });
+    //if (player.pearls >= 50) return res.json({ success: false, message: 'Перлин повно (50/50)' });
     if (player.last_loss_depth === null) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
 
     const threshold = player.last_loss_depth * (1 + player.eat_threshold);
@@ -235,7 +235,7 @@ app.post('/walk', async (req, res) => {
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
-    //if (player.pearls < 50) return res.json({ success: false, message: 'Потрібно 50 перлин для обміну' });
+    if (player.pearls < 1) return res.json({ success: false, message: 'Потрібна хоча б одна перлина для обміну' });
 
     const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
     if (currentDepth > threshold) {

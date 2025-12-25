@@ -40,8 +40,8 @@ checkDatabaseConnection()
     CREATE TABLE IF NOT EXISTS players (
       id SERIAL PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
-      scales FLOAT DEFAULT 50,
-      lost_scales INTEGER DEFAULT 0,
+      pearls FLOAT DEFAULT 50,
+      lost_pearls INTEGER DEFAULT 0,
       coins INTEGER DEFAULT 0,
       last_loss_depth FLOAT,
       alive BOOLEAN DEFAULT TRUE,
@@ -74,7 +74,7 @@ checkDatabaseConnection()
   .then(() => {
     console.log('🌊 Глобальна глибина ініціалізована (500 м)');
 
-    // === ЗАПУСК СЕРВЕРА ЧЕРЕЗ server (для Socket.io) ===
+    // === ЗАПУСК СЕРВЕРА ===
     server.listen(port, () => {
       console.log(`🚀 Сервер запущено на порту ${port}`);
       console.log(`Відкрий: https://твій-сервіс.onrender.com`);
@@ -108,84 +108,76 @@ checkDatabaseConnection()
         `);
         let updatedPlayers = [];
         for (let row of playersResult.rows) {
-          let player = { ...row }; // Копіюємо, щоб не мутувати оригінал
+          let player = { ...row };
           let updated = false;
           let actionLog = `${player.username}: `;
 
           // Конвертуємо значення
-          let scales = parseFloat(player.scales);
-          let lostScales = parseInt(player.lost_scales || 0);
+          let pearls = parseFloat(player.pearls);
+          let lostPearls = parseInt(player.lost_pearls || 0);
           let coins = parseInt(player.coins || 0);
           let lastLossDepth = player.last_loss_depth ? parseFloat(player.last_loss_depth) : null;
 
-          const previousScales = scales; // для перевірки переходу через 50
-
-          // === КЛЮЧОВА ЛОГІКА: Резвитися, коли луска досягає ≥50 ===
-          if (scales >= 50 && (previousScales < 50 || lastLossDepth === null)) {
-            scales -= 1;
-            lostScales += 1;
-            coins += 1;
-            lastLossDepth = newDepth; // фіксуємо глибину, де стала повною
+          // === Їсти: якщо перлин <50 і глибина достатня ===
+          if (pearls < 50 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + player.eat_threshold)) {
+            const bonus = (newDepth - lastLossDepth) / lastLossDepth;
+            const pearlGain = 1 + bonus * 2; // Зменшено з *10 на *2
+            pearls = Math.min(50, pearls + pearlGain);
             updated = true;
-            actionLog += `резвився на глибині ${Math.round(newDepth)}м! (-1 луска, +1 монета) 🐍💦💰 `;
+            actionLog += `зібрав перлину на глибині (+${pearlGain.toFixed(2)} перлин) 💎 `;
+          }
 
-            if (scales <= 0) {
-              scales = 0;
+          // === Гуляти: якщо перлин >=50 і глибина достатньо мілка ===
+          if (pearls >= 50 && (lastLossDepth === null || newDepth <= lastLossDepth * (1 - player.play_threshold))) {
+            pearls -= 1;
+            lostPearls += 1;
+            coins += 1;
+            lastLossDepth = newDepth;
+            updated = true;
+            actionLog += `обміняв перлину на мілководді (-1 перлина, +1 монета) 🪙 `;
+
+            if (pearls <= 0) {
+              pearls = 0;
               player.alive = false;
               player.death_time = new Date();
-              actionLog += `→ ЗМІЯ ПОМЕРЛА ВІД ЗАДОВОЛЕННЯ 💀`;
-            }
-          }
-          // === Їсти: тільки якщо луска <50 і ми глибше, ніж остання точка резвіння ===
-          else if (scales < 50 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + player.eat_threshold)) {
-            const bonus = (newDepth - lastLossDepth) / lastLossDepth;
-            const scaleGain = 1 + bonus * 10; // можеш налаштувати силу бонусу
-            scales = Math.min(50, scales + scaleGain);
-            updated = true;
-            actionLog += `наїлася на глибині (+${scaleGain.toFixed(2)} луски) 🎣 `;
-
-            // Якщо знову досягли 50 — резвимося наступного тику (не в цьому ж)
-            if (scales >= 50) {
-              actionLog += `→ майже повна!`;
+              actionLog += `→ ЗМІЯ СТАЛА ПЕРНАТОЮ І ВІДЛЕТІЛА З МОНЕТАМИ! 🪶💰`;
             }
           }
 
-          // Зберігаємо зміни, якщо були
-          if (updated || previousScales !== scales) {
+          // Зберігаємо зміни
+          if (updated) {
             await pool.query(`
               UPDATE players 
-              SET scales = $1, 
-                  lost_scales = $2, 
+              SET pearls = $1, 
+                  lost_pearls = $2, 
                   coins = $3, 
                   last_loss_depth = $4,
                   alive = $5,
                   death_time = $6
               WHERE id = $7
             `, [
-              scales,
-              lostScales,
+              pearls,
+              lostPearls,
               coins,
               lastLossDepth,
-              scales > 0,
-              scales <= 0 ? new Date() : player.death_time,
+              pearls > 0,
+              pearls <= 0 ? new Date() : player.death_time,
               player.id
             ]);
 
             updatedPlayers.push({
               id: player.id,
               username: player.username,
-              scales: parseFloat(scales.toFixed(2)),
-              lost_scales: lostScales,
+              pearls: parseFloat(pearls.toFixed(2)),
+              lost_pearls: lostPearls,
               coins: coins,
-              alive: scales > 0,
+              alive: pearls > 0,
               action: actionLog.trim()
             });
 
             console.log(`🐍 ${actionLog.trim()}`);
           }
         }
-       
-           
 
         // 3. Розсилаємо оновлення всім клієнтам
         io.emit('depth_update', {
@@ -213,11 +205,90 @@ checkDatabaseConnection()
 // Статичні файли та роути
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-app.use(express.json()); // Додати це перед роутами, якщо немає
+
+app.get('/leaderboard', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT username, coins, alive, death_time
+      FROM players
+      ORDER BY coins DESC
+      LIMIT 10
+    `);
+    const players = result.rows;
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="uk">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Лідерборд - Водяна Змія</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            margin: 50px; 
+            background: #001f3f; 
+            color: #fff; 
+          }
+          .card { 
+            background: rgba(255,255,255,0.1); 
+            padding: 30px; 
+            border-radius: 15px; 
+            display: inline-block; 
+            min-width: 400px; 
+          }
+          h1 { color: #7fffd4; }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px; 
+          }
+          th, td { 
+            padding: 10px; 
+            border: 1px solid #7fffd4; 
+          }
+          th { background: rgba(127,255,212,0.2); }
+          .alive { color: #7fffd4; }
+          .dead { color: #ff6b6b; }
+        </style>
+      </head>
+      <body>
+        <h1>🏆 Лідерборд Водяних Змій</h1>
+        <div class="card">
+          <h3>Топ-10 гравців за монетами</h3>
+          <table>
+            <tr>
+              <th>Гравець</th>
+              <th>Монети 🪙</th>
+              <th>Статус</th>
+            </tr>
+            ${players.map(p => `
+              <tr>
+                <td>${p.username}</td>
+                <td>${p.coins}</td>
+                <td class="${p.alive ? 'alive' : 'dead'}">
+                  ${p.alive ? 'Плаває 🐉' : 'Відлетіла 🪶' + (p.death_time ? ' (' + new Date(p.death_time).toLocaleString('uk-UA') + ')' : '')}
+                </td>
+              </tr>
+            `).join('')}
+          </table>
+          <p style="margin-top: 20px;">
+            <a href="/" style="color: #7fffd4;">← Повернутися до гри</a>
+          </p>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error('Помилка лідерборду:', err);
+    res.send('<h2>Помилка бази даних. Спробуйте пізніше.</h2>');
+  }
+});
 
 app.post('/eat', async (req, res) => {
   const { username } = req.body;
@@ -235,51 +306,49 @@ app.post('/eat', async (req, res) => {
     
     // Перевірка умов
     if (!player.alive) {
-      return res.json({ success: false, message: 'Змія мертва 💀' });
+      return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     }
     
-    if (player.scales >= 50) {
-      return res.json({ success: false, message: 'Луска вже повна (50/50)' });
+    if (player.pearls >= 50) {
+      return res.json({ success: false, message: 'Перлин вже повно (50/50)' });
     }
     
     if (player.last_loss_depth === null) {
-      return res.json({ success: false, message: 'Спочатку треба погуляти' });
+      return res.json({ success: false, message: 'Спочатку треба обміняти перлину' });
     }
     
     const threshold = player.last_loss_depth * (1 + player.eat_threshold);
     if (currentDepth < threshold) {
       return res.json({ 
         success: false, 
-        message: `Потрібно опуститися нижче (зараз ${Math.round(currentDepth)}м, треба ≥${Math.round(threshold)}м)` 
+        message: `Потрібно пірнути глибше (зараз ${Math.round(currentDepth)}м, треба ≥${Math.round(threshold)}м)` 
       });
     }
     
     // Виконуємо їжу
     const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
-    const scaleGain = 1 + bonus;
-    const newScales = Math.min(50, parseFloat(player.scales) + scaleGain);
-    const isFullNow = newScales >= 50;
+    const pearlGain = 1 + bonus;
+    const newPearls = Math.min(50, parseFloat(player.pearls) + pearlGain);
     
     await pool.query(`
       UPDATE players 
-      SET scales = $1, 
-          last_loss_depth = CASE WHEN $2 THEN NULL ELSE last_loss_depth END
-      WHERE username = $3
-    `, [newScales, isFullNow, username]);
+      SET pearls = $1
+      WHERE username = $2
+    `, [newPearls, username]);
     
-    // Повідомляємо всіх через Socket.io
+    // Повідомляємо всіх
     io.emit('players_updated', [{
       username: player.username,
-      scales: parseFloat(newScales.toFixed(2)),
-      lost_scales: player.lost_scales,
+      pearls: parseFloat(newPearls.toFixed(2)),
+      lost_pearls: player.lost_pearls,
       coins: player.coins,
       alive: true,
-      action: `${username}: поїв вручну (+${scaleGain.toFixed(2)} луски)${isFullNow ? ' → луска повна!' : ''}`
+      action: `${username}: зібрав перлину вручну (+${pearlGain.toFixed(2)} перлин) 💎`
     }]);
     
     res.json({ 
       success: true, 
-      message: `Смачно! +${scaleGain.toFixed(2)} луски 🎣${isFullNow ? ' Луска повна!' : ''}`
+      message: `Смачно! +${pearlGain.toFixed(2)} перлин 💎${newPearls >= 50 ? ' Перлини повні!' : ''}`
     });
     
   } catch (err) {
@@ -292,7 +361,6 @@ app.post('/walk', async (req, res) => {
   const { username } = req.body;
   
   try {
-    // Отримуємо гравця і поточну глибину
     const playerResult = await pool.query('SELECT * FROM players WHERE username = $1', [username]);
     const depthResult = await pool.query('SELECT current_depth FROM game_state WHERE id = 1');
     
@@ -305,14 +373,14 @@ app.post('/walk', async (req, res) => {
     
     // Перевірка умов
     if (!player.alive) {
-      return res.json({ success: false, message: 'Змія мертва 💀' });
+      return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     }
     
-    if (player.last_loss_depth === null) {
-      return res.json({ success: false, message: 'Луска ще не повна' });
+    if (player.pearls < 50) {
+      return res.json({ success: false, message: 'Недостатньо перлин для обміну' });
     }
     
-    const threshold = player.last_loss_depth * (1 - player.play_threshold);
+    const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
     if (currentDepth > threshold) {
       return res.json({ 
         success: false, 
@@ -320,36 +388,36 @@ app.post('/walk', async (req, res) => {
       });
     }
     
-    // Виконуємо прогулянку
-    const newScales = player.scales - 1;
-    const newLostScales = player.lost_scales + 1;
+    // Виконуємо обмін
+    const newPearls = player.pearls - 1;
+    const newLostPearls = player.lost_pearls + 1;
     const newCoins = player.coins + 1;
-    const alive = newScales > 0;
+    const alive = newPearls > 0;
     
     await pool.query(`
       UPDATE players 
-      SET scales = $1, 
-          lost_scales = $2, 
+      SET pearls = $1, 
+          lost_pearls = $2, 
           coins = $3, 
           last_loss_depth = $4,
           alive = $5,
           death_time = CASE WHEN $5 = false THEN NOW() ELSE death_time END
       WHERE username = $6
-    `, [newScales, newLostScales, newCoins, currentDepth, alive, username]);
+    `, [newPearls, newLostPearls, newCoins, currentDepth, alive, username]);
     
-    // Повідомляємо всіх через Socket.io
+    // Повідомляємо всіх
     io.emit('players_updated', [{
       username: player.username,
-      scales: parseFloat(newScales.toFixed(2)),
-      lost_scales: newLostScales,
+      pearls: parseFloat(newPearls.toFixed(2)),
+      lost_pearls: newLostPearls,
       coins: newCoins,
       alive: alive,
-      action: `${username}: прогулявся вручну (-1 луска, +1 монета)${!alive ? ' → ЗМІЯ ПОМЕРЛА 💀' : ''}`
+      action: `${username}: обміняв перлину вручну (-1 перлина, +1 монета)${!alive ? ' → ЗМІЯ СТАЛА ПЕРНАТОЮ І ВІДЛЕТІЛА! 🪶💰' : ''}`
     }]);
     
     res.json({ 
       success: true, 
-      message: alive ? 'Прогулянка успішна! -1 луска, +1 монета 🪙' : 'Остання прогулянка... Змія померла 💀'
+      message: alive ? 'Обмін успішний! -1 перлина, +1 монета 🪙' : 'Остання перлина... Змія стала пернатою і відлетіла! 🪶💰'
     });
     
   } catch (err) {
@@ -357,7 +425,7 @@ app.post('/walk', async (req, res) => {
     res.json({ success: false, message: 'Помилка сервера' });
   }
 });
-// Обробка введення імені
+
 app.post('/join', async (req, res) => {
   const username = req.body.username.trim();
   
@@ -369,18 +437,15 @@ app.post('/join', async (req, res) => {
   }
 
   try {
-    // Шукаємо гравця
     let result = await pool.query('SELECT * FROM players WHERE username = $1', [username]);
 
     if (result.rows.length > 0) {
-      // Гравець вже є
       const player = result.rows[0];
       res.send(generatePlayerPage(player, false));
     } else {
-      // Створюємо нового (last_loss_depth = NULL спочатку)
       result = await pool.query(`
         INSERT INTO players 
-        (username, scales, lost_scales, coins, last_loss_depth, alive, start_time)
+        (username, pearls, lost_pearls, coins, last_loss_depth, alive, start_time)
         VALUES ($1, 50, 0, 0, NULL, true, NOW())
         RETURNING *
       `, [username]);
@@ -396,7 +461,7 @@ app.post('/join', async (req, res) => {
 
 function generatePlayerPage(player, isNew) {
   const welcomeMsg = isNew 
-    ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія готова до пригод!</h2>`
+    ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія пірнає за перлинами!</h2>`
     : `<h2>З поверненням, ${player.username}!</h2>`;
 
   return `
@@ -442,37 +507,38 @@ function generatePlayerPage(player, isNew) {
       ${welcomeMsg}
 
       <div class="card" id="player-card">
-        <p class="scales"><strong>Луска:</strong> ${player.scales.toFixed(1)}</p>
-        <p class="lost"><strong>Втрачено луски:</strong> ${player.lost_scales}</p>
+        <p class="pearls"><strong>Перлини:</strong> ${player.pearls.toFixed(1)} 💎</p>
+        <p class="lost"><strong>Обміняно перлин:</strong> ${player.lost_pearls}</p>
         <p class="coins"><strong>Монети:</strong> ${player.coins} 🪙</p>
-        <p class="status"><strong>Статус:</strong> ${player.alive ? 'Жива 🐉' : 'Зникла 💀'}</p>
+        <p class="status"><strong>Статус:</strong> ${player.alive ? 'Пірнає 🐉' : 'Відлетіла 🪶'}</p>
         
-  <button id="walk-btn" style="
-    margin-top: 15px;
-    padding: 10px 20px;
-    background: #7fffd4;
-    color: #001f3f;
-    border: none;
-    border-radius: 8px;
-    font-size: 1.1em;
-    cursor: pointer;
-    font-weight: bold;
-  ">🚶 Гуляти</button>
-  
-  <p id="walk-status" style="font-size: 0.9em; color: #aaa; margin-top: 10px;"></p>
-  <button id="eat-btn" style="
-  margin-top: 15px;
-  margin-left: 10px;
-  padding: 10px 20px;
-  background: #ff6b9d;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 1.1em;
-  cursor: pointer;
-  font-weight: bold;
-">🍽️ Їсти</button>
-<p id="eat-status" style="font-size: 0.9em; color: #aaa; margin-top: 5px;"></p>
+        <button id="walk-btn" style="
+          margin-top: 15px;
+          padding: 10px 20px;
+          background: #7fffd4;
+          color: #001f3f;
+          border: none;
+          border-radius: 8px;
+          font-size: 1.1em;
+          cursor: pointer;
+          font-weight: bold;
+        ">🪙 Обміняти перлину</button>
+        <p id="walk-status" style="font-size: 0.9em; color: #aaa; margin-top: 10px;"></p>
+        
+        <button id="eat-btn" style="
+          margin-top: 15px;
+          margin-left: 10px;
+          padding: 10px 20px;
+          background: #ff6b9d;
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          font-size: 1.1em;
+          cursor: pointer;
+          font-weight: bold;
+        ">💎 Збирати перлини</button>
+        <p id="eat-status" style="font-size: 0.9em; color: #aaa; margin-top: 5px;"></p>
+        
         <p><small>Гра запущена: ${new Date(player.start_time).toLocaleString('uk-UA')}</small></p>
       </div>
 
@@ -485,6 +551,8 @@ function generatePlayerPage(player, isNew) {
           Наступна зміна — приблизно через <span id="countdown">30</span> секунд
         </p>
       </div>
+
+      <p><a href="/leaderboard" style="color: #7fffd4; font-size: 1.1em;">🏆 Переглянути лідерборд</a></p>
 
       <script src="/socket.io/socket.io.js"></script>
       <script>
@@ -513,10 +581,10 @@ function generatePlayerPage(player, isNew) {
           players.forEach(p => {
             if (p.username === username) {
               const isDead = !p.alive;
-              document.querySelector('.scales').innerHTML = '<strong>Луска:</strong> ' + p.scales.toFixed(1) + (isDead ? ' 💀' : '');
-              document.querySelector('.lost').innerHTML = '<strong>Втрачено луски:</strong> ' + p.lost_scales;
+              document.querySelector('.pearls').innerHTML = '<strong>Перлини:</strong> ' + p.pearls.toFixed(1) + ' 💎' + (isDead ? ' 🪶' : '');
+              document.querySelector('.lost').innerHTML = '<strong>Обміняно перлин:</strong> ' + p.lost_pearls;
               document.querySelector('.coins').innerHTML = '<strong>Монети:</strong> ' + p.coins + ' 🪙';
-              document.querySelector('.status').innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Жива 🐉' : '<span class="dead">Зникла 💀</span>');
+              document.querySelector('.status').innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Пірнає 🐉' : '<span class="dead">Відлетіла 🪶</span>');
 
               const notification = document.createElement('div');
               notification.className = 'notification';
@@ -551,64 +619,64 @@ function generatePlayerPage(player, isNew) {
         });
 
         document.getElementById('walk-btn').addEventListener('click', () => {
-  const btn = document.getElementById('walk-btn');
-  const status = document.getElementById('walk-status');
-  
-  btn.disabled = true;
-  status.textContent = 'Перевіряємо умови...';
-  
-  fetch('/walk', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      status.style.color = '#7fffd4';
-      status.textContent = '✓ ' + data.message;
-    } else {
-      status.style.color = '#ff6b6b';
-      status.textContent = '✗ ' + data.message;
-    }
-    setTimeout(() => { btn.disabled = false; }, 2000);
-  })
-  .catch(err => {
-    status.style.color = '#ff6b6b';
-    status.textContent = 'Помилка звязку';
-    btn.disabled = false;
-  });
-});
+          const btn = document.getElementById('walk-btn');
+          const status = document.getElementById('walk-status');
+          
+          btn.disabled = true;
+          status.textContent = 'Перевіряємо умови...';
+          
+          fetch('/walk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              status.style.color = '#7fffd4';
+              status.textContent = '✓ ' + data.message;
+            } else {
+              status.style.color = '#ff6b6b';
+              status.textContent = '✗ ' + data.message;
+            }
+            setTimeout(() => { btn.disabled = false; }, 2000);
+          })
+          .catch(err => {
+            status.style.color = '#ff6b6b';
+            status.textContent = 'Помилка зв’язку';
+            btn.disabled = false;
+          });
+        });
 
-document.getElementById('eat-btn').addEventListener('click', () => {
-  const btn = document.getElementById('eat-btn');
-  const status = document.getElementById('eat-status');
-  
-  btn.disabled = true;
-  status.textContent = 'Перевіряємо умови...';
-  
-  fetch('/eat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      status.style.color = '#7fffd4';
-      status.textContent = '✓ ' + data.message;
-    } else {
-      status.style.color = '#ff6b6b';
-      status.textContent = '✗ ' + data.message;
-    }
-    setTimeout(() => { btn.disabled = false; }, 2000);
-  })
-  .catch(err => {
-    status.style.color = '#ff6b6b';
-    status.textContent = 'Помилка звязку';
-    btn.disabled = false;
-  });
-});
+        document.getElementById('eat-btn').addEventListener('click', () => {
+          const btn = document.getElementById('eat-btn');
+          const status = document.getElementById('eat-status');
+          
+          btn.disabled = true;
+          status.textContent = 'Перевіряємо умови...';
+          
+          fetch('/eat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) {
+              status.style.color = '#7fffd4';
+              status.textContent = '✓ ' + data.message;
+            } else {
+              status.style.color = '#ff6b6b';
+              status.textContent = '✗ ' + data.message;
+            }
+            setTimeout(() => { btn.disabled = false; }, 2000);
+          })
+          .catch(err => {
+            status.style.color = '#ff6b6b';
+            status.textContent = 'Помилка зв’язку';
+            btn.disabled = false;
+          });
+        });
       </script>
 
       <br>

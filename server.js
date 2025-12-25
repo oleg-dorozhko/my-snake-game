@@ -26,7 +26,7 @@ async function resetAndInitDatabase() {
     console.log('🆕 Створюємо нові таблиці...');
 
     await pool.query(`
-      CREATE TABLE IF NOT EXIST players (
+      CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         pearls FLOAT DEFAULT 50.0,
@@ -43,7 +43,7 @@ async function resetAndInitDatabase() {
     `);
 
     await pool.query(`
-      CREATE TABLE  IF NOT EXIST game_state (
+      CREATE TABLE  IF NOT EXISTS game_state (
         id INTEGER PRIMARY KEY DEFAULT 1,
         current_depth FLOAT DEFAULT 500,
         last_update TIMESTAMP DEFAULT NOW(),

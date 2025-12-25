@@ -104,16 +104,16 @@ resetAndInitDatabase()
           let lastLossDepth = row.last_loss_depth ? parseFloat(row.last_loss_depth) : null;
 
           // Збирати перлини (глибше)
-          if (pearls < 50 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
+          if (coins > 0 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
             const bonus = (newDepth - lastLossDepth) / lastLossDepth;
-            const gain = 1 + bonus * 2;
-            pearls = Math.min(50, pearls + gain);
+            const gain = 1 + bonus;
+            pearls = pearls + gain;
             updated = true;
             actionLog += `зібрав перлини (+${gain.toFixed(2)}) 💎 `;
           }
 
           // Обміняти (мілкіше або перший раз)
-          if (pearls >= 50 && (lastLossDepth === null || newDepth <= lastLossDepth * (1 - row.play_threshold))) {
+          if (pearls >= 1 && (lastLossDepth === null || newDepth <= lastLossDepth * (1 - row.play_threshold))) {
             pearls -= 1;
             lostPearls += 1;
             coins += 1;

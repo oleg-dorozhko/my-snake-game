@@ -235,7 +235,7 @@ app.post('/walk', async (req, res) => {
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
-    if (player.pearls < 50) return res.json({ success: false, message: 'Потрібно 50 перлин для обміну' });
+    //if (player.pearls < 50) return res.json({ success: false, message: 'Потрібно 50 перлин для обміну' });
 
     const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
     if (currentDepth > threshold) {
@@ -257,10 +257,10 @@ app.post('/walk', async (req, res) => {
       pearls: parseFloat(newPearls.toFixed(2)),
       coins: player.coins + 1,
       alive,
-      action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ВІДЛЕТІЛА З СУНДУКОМ! 🪶💰' : ''}`
+      action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ВІДЛЕТІЛА РАЗОМ З СУНДУКОМ! 🪶💰' : ''}`
     }]);
 
-    res.json({ success: true, message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і відлетіла з сундуком! 🪶💰' });
+    res.json({ success: true, message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і відлетіла разом з сундуком! 🪶💰' });
   } catch (err) {
     console.error('/walk помилка:', err);
     res.json({ success: false, message: 'Помилка сервера' });
@@ -302,7 +302,7 @@ function generatePage(player, isNew) {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Перлинна Змія - ${player.username}</title>
+    <title>Водяна Змія - ${player.username}</title>
     <style>
       body {font-family: Arial, sans-serif; text-align: center; background: #001f3f; color: #fff; margin: 40px;}
       .card {background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 420px; margin: 15px;}
@@ -316,14 +316,14 @@ function generatePage(player, isNew) {
     </style>
   </head>
   <body>
-    <h1>🐍 Перлинна Водяна Змія</h1>
+    <h1>🐍 Водяна Змія</h1>
     <h2 ${isNew ? 'style="color:#7fffd4"' : ''}>${isNew ? 'Вітаємо' : 'З поверненням'}, ${player.username}!</h2>
 
     <div class="card" id="player-card">
       <p style="font-size:1.4em"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
       <p><strong>Обміняно перлин:</strong> ${lost}</p>
       <p style="font-size:1.3em"><strong>Монети:</strong> ${coins} 🪙</p>
-      <p><strong>Статус:</strong> ${alive ? 'Пірнає за перлинами 🐉' : '<span class="dead">Відлетіла з сундуком 🪶</span>'}</p>
+      <p><strong>Статус:</strong> ${alive ? 'Пірнає за перлинами 🐉' : '<span class="dead">Відлетіла разом з сундуком 🪶</span>'}</p>
 
       <button id="walk-btn">🪙 Обміняти перлину</button>
       <p id="walk-status" style="min-height:24px"></p>

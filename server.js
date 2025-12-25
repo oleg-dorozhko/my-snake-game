@@ -19,14 +19,14 @@ const io = new Server(server, {
 
 async function resetAndInitDatabase() {
   try {
-    console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
-    await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
-    await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
+    //console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
+    //await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
+    //await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
 
     console.log('🆕 Створюємо нові таблиці...');
 
     await pool.query(`
-      CREATE TABLE players (
+      CREATE TABLE IF NOT EXIST players (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
         pearls FLOAT DEFAULT 50.0,
@@ -43,7 +43,7 @@ async function resetAndInitDatabase() {
     `);
 
     await pool.query(`
-      CREATE TABLE game_state (
+      CREATE TABLE  IF NOT EXIST game_state (
         id INTEGER PRIMARY KEY DEFAULT 1,
         current_depth FLOAT DEFAULT 500,
         last_update TIMESTAMP DEFAULT NOW(),

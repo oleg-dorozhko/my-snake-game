@@ -460,6 +460,12 @@ app.post('/join', async (req, res) => {
 });
 
 function generatePlayerPage(player, isNew) {
+   // Безпечне форматування чисел
+  const pearls = player.pearls != null ? parseFloat(player.pearls).toFixed(1) : '0.0';
+  const lostPearls = player.lost_pearls || 0;
+  const coins = player.coins || 0;
+  const alive = player.alive || false;
+
   const welcomeMsg = isNew 
     ? `<h2 style="color:green;">Вітаємо, ${player.username}! Твоя водяна змія пірнає за перлинами!</h2>`
     : `<h2>З поверненням, ${player.username}!</h2>`;
@@ -502,15 +508,15 @@ function generatePlayerPage(player, isNew) {
         .dead { color: #ff6b6b; }
       </style>
     </head>
-    <body>
+      <body>
       <h1>🐍 Водяна Змія</h1>
       ${welcomeMsg}
 
       <div class="card" id="player-card">
-        <p class="pearls"><strong>Перлини:</strong> ${player.pearls.toFixed(1)} 💎</p>
-        <p class="lost"><strong>Обміняно перлин:</strong> ${player.lost_pearls}</p>
-        <p class="coins"><strong>Монети:</strong> ${player.coins} 🪙</p>
-        <p class="status"><strong>Статус:</strong> ${player.alive ? 'Пірнає 🐉' : 'Відлетіла 🪶'}</p>
+        <p class="pearls"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
+        <p class="lost"><strong>Обміняно перлин:</strong> ${lostPearls}</p>
+        <p class="coins"><strong>Монети:</strong> ${coins} 🪙</p>
+        <p class="status"><strong>Статус:</strong> ${alive ? 'Пірнає 🐉' : '<span class="dead">Відлетіла 🪶</span>'}</p>
         
         <button id="walk-btn" style="
           margin-top: 15px;

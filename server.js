@@ -237,10 +237,10 @@ app.post('/walk', async (req, res) => {
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     if (player.pearls < 1) return res.json({ success: false, message: 'Потрібна хоча б одна перлина для обміну' });
 
-    const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
-    if (currentDepth > threshold) {
-      return res.json({ success: false, message: `Піднімись вище! (зараз ${Math.round(currentDepth)} м, треба ≤ ${Math.round(threshold)} м)` });
-    }
+    //const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
+    //if (currentDepth > threshold) {
+    //  return res.json({ success: false, message: `Піднімись вище! (зараз ${Math.round(currentDepth)} м, треба ≤ ${Math.round(threshold)} м)` });
+    //}
 
     const newPearls = player.pearls - 1;
     const alive = newPearls > 0;

@@ -104,10 +104,11 @@ resetAndInitDatabase()
           let lastLossDepth = row.last_loss_depth ? parseFloat(row.last_loss_depth) : null;
 
           // Збирати перлини (глибше)
-          if (coins > 0 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
+          if (lostPearls > 0 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
             const bonus = (newDepth - lastLossDepth) / lastLossDepth;
             const gain = 1 + bonus;
             pearls = pearls + gain;
+            lostPearls --;
             updated = true;
             actionLog += `зібрав перлини (+${gain.toFixed(2)}) 💎 `;
           }
@@ -202,7 +203,7 @@ app.post('/eat', async (req, res) => {
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     //if (player.pearls >= 50) return res.json({ success: false, message: 'Перлин повно (50/50)' });
-    if (player.last_loss_depth === null) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+    if (player.last_loss_depth === null||player.lostPearls==0) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
 
     const threshold = player.last_loss_depth * (1 + player.eat_threshold);
     if (currentDepth <= threshold) {
@@ -211,9 +212,14 @@ app.post('/eat', async (req, res) => {
 
     const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
     const gain = 1 + bonus;
-    const newPearls = Math.min(50, player.pearls + gain);
-
-    await pool.query('UPDATE players SET pearls = $1 WHERE username = $2', [newPearls, username]);
+    const newPearls = player.pearls + gain;
+    const newLostPearls = player.lostPearls - 1;
+    
+    // Update both pearls AND lostPearls
+    await pool.query(
+      'UPDATE players SET pearls = $1, lostPearls = $2 WHERE username = $3', 
+      [newPearls, newLostPearls, username]
+    );
 
     io.emit('players_updated', [{ username, pearls: parseFloat(newPearls.toFixed(2)), action: `${username}: зібрав перлини вручну (+${gain.toFixed(2)}) 💎` }]);
 

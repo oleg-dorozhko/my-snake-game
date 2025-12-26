@@ -220,7 +220,8 @@ app.post('/eat', async (req, res) => {
       alive: true,
       action: `${username}: зібрав перлину з глибини ${Math.round(exchangeDepth)} м (+${gain.toFixed(2)}) 💎` 
     }]);
-
+// Оновити історію на фронтенді
+io.emit('history_updated', { username });
     res.json({ success: true, message: `+${gain.toFixed(2)} перлин 💎 (з ${Math.round(exchangeDepth)} м)` });
   } catch (err) {
     console.error('/eat помилка:', err);
@@ -417,7 +418,7 @@ function generatePage(player, isNew) {
               setTimeout(() => n.remove(), 10000);
               
               // Оновити історію після обміну
-              if (p.action.includes('обміняв перлину')) {
+              if (p.action.includes('обміняв перлину') || p.action.includes('зібрав перлину')) {
                 loadHistory();
               }
             }

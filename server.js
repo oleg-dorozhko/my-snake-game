@@ -202,26 +202,38 @@ app.post('/eat', async (req, res) => {
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
-    //if (player.pearls >= 50) return res.json({ success: false, message: 'Перлин повно (50/50)' });
-    if (player.last_loss_depth === null||player.lost_pearls ==0) return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+    if (player.last_loss_depth === null || player.lost_pearls == 0) {
+      return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+    }
 
     const threshold = player.last_loss_depth * (1 + player.eat_threshold);
     if (currentDepth <= threshold) {
-      return res.json({ success: false, message: `Пірнай глибше! (зараз ${Math.round(currentDepth)} м, треба > ${Math.round(threshold)} м)` });
+      return res.json({ 
+        success: false, 
+        message: `Пірнай глибше! (зараз ${Math.round(currentDepth)} м, треба > ${Math.round(threshold)} м)` 
+      });
     }
 
     const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
     const gain = 1 + bonus;
     const newPearls = player.pearls + gain;
-    const newLostPearls = player.lost_pearls  - 1;
+    const newLostPearls = player.lost_pearls - 1;
     
-    // Update both pearls AND lostPearls
+    // Оновити базу даних
     await pool.query(
-      'UPDATE players SET pearls = $1, lost_pearls  = $2 WHERE username = $3', 
+      'UPDATE players SET pearls = $1, lost_pearls = $2 WHERE username = $3', 
       [newPearls, newLostPearls, username]
     );
 
-    io.emit('players_updated', [{ username, pearls: parseFloat(newPearls.toFixed(2)), action: `${username}: зібрав перлини вручну (+${gain.toFixed(2)}) 💎` }]);
+    // Відправити ПОВНІ дані на фронтенд
+    io.emit('players_updated', [{ 
+      username, 
+      pearls: parseFloat(newPearls.toFixed(2)),
+      lost_pearls: newLostPearls,  // ← Додано!
+      coins: player.coins,          // ← Додано!
+      alive: true,
+      action: `${username}: зібрав перлини вручну (+${gain.toFixed(2)}) 💎` 
+    }]);
 
     res.json({ success: true, message: `+${gain.toFixed(2)} перлин 💎` });
   } catch (err) {
@@ -243,30 +255,33 @@ app.post('/walk', async (req, res) => {
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
     if (player.pearls < 1) return res.json({ success: false, message: 'Потрібна хоча б одна перлина для обміну' });
 
-    //const threshold = player.last_loss_depth ? player.last_loss_depth * (1 - player.play_threshold) : currentDepth;
-    //if (currentDepth > threshold) {
-    //  return res.json({ success: false, message: `Піднімись вище! (зараз ${Math.round(currentDepth)} м, треба ≤ ${Math.round(threshold)} м)` });
-    //}
-
     const newPearls = player.pearls - 1;
+    const newLostPearls = player.lost_pearls + 1;
+    const newCoins = player.coins + 1;
     const alive = newPearls > 0;
 
+    // Оновити базу даних
     await pool.query(`
       UPDATE players 
-      SET pearls = $1, lost_pearls = lost_pearls + 1, coins = coins + 1,
-          last_loss_depth = $2, alive = $3, death_time = $4
-      WHERE username = $5
-    `, [newPearls, currentDepth, alive, alive ? player.death_time : new Date(), username]);
+      SET pearls = $1, lost_pearls = $2, coins = $3,
+          last_loss_depth = $4, alive = $5, death_time = $6
+      WHERE username = $7
+    `, [newPearls, newLostPearls, newCoins, currentDepth, alive, alive ? player.death_time : new Date(), username]);
 
+    // Відправити ПОВНІ дані на фронтенд
     io.emit('players_updated', [{
       username,
       pearls: parseFloat(newPearls.toFixed(2)),
-      coins: player.coins + 1,
+      lost_pearls: newLostPearls,  // ← Використовую змінну!
+      coins: newCoins,              // ← Використовую змінну!
       alive,
       action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ВІДЛЕТІЛА РАЗОМ З СУНДУКОМ! 🪶💰' : ''}`
     }]);
 
-    res.json({ success: true, message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і відлетіла разом з сундуком! 🪶💰' });
+    res.json({ 
+      success: true, 
+      message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і відлетіла разом з сундуком! 🪶💰' 
+    });
   } catch (err) {
     console.error('/walk помилка:', err);
     res.json({ success: false, message: 'Помилка сервера' });

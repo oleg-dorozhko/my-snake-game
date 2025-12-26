@@ -177,16 +177,16 @@ app.post('/eat', async (req, res) => {
     if (parseInt(checkHistoryRes.rows[0].count) === 0) {
       return res.json({ success: false, message: 'Спочатку обміняй перлину' });
     }
-
-    // Отримати перший підходящий обмін з історії
-    const historyRes = await pool.query(`
-      SELECT id, depth 
-      FROM exchange_history 
-      WHERE player_id = $1 
-        AND depth * (1 + $2) < $3
-      ORDER BY exchange_time ASC 
-      LIMIT 1
-    `, [player.id, player.eat_threshold, currentDepth]);
+// Отримати перший підходящий обмін з історії
+const historyRes = await pool.query(`
+  SELECT id, depth 
+  FROM exchange_history 
+  WHERE player_id = $1 
+    AND depth * $2 < $3
+  ORDER BY exchange_time ASC 
+  LIMIT 1
+`, [player.id, (1 + player.eat_threshold), currentDepth]);
+   
 
     // Якщо немає підходящого обміну
     if (historyRes.rows.length === 0) {

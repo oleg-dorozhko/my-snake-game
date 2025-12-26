@@ -168,15 +168,18 @@ app.post('/eat', async (req, res) => {
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
 
-    // Отримати найстарший обмін з історії
+    
+
+    // Отримати перший підходящий обмін з історії
     const historyRes = await pool.query(`
       SELECT id, depth 
       FROM exchange_history 
       WHERE player_id = $1 
+        AND depth * $2 < $3
       ORDER BY exchange_time ASC 
       LIMIT 1
-    `, [player.id]);
-
+    `, [player.id, (1 + player.eat_threshold), currentDepth]);
+    
     // Якщо історії немає - немає і збору
     if (historyRes.rows.length === 0) {
       return res.json({ success: false, message: 'Спочатку обміняй перлину' });

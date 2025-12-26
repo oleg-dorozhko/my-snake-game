@@ -20,6 +20,7 @@ const io = new Server(server, {
 async function resetAndInitDatabase() {
   try {
     console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
+    await pool.query(`DROP TABLE IF EXISTS exchange_history CASCADE`);
     await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
     await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
 
@@ -43,11 +44,22 @@ async function resetAndInitDatabase() {
     `);
 
     await pool.query(`
-      CREATE TABLE  IF NOT EXISTS game_state (
+      CREATE TABLE IF NOT EXISTS game_state (
         id INTEGER PRIMARY KEY DEFAULT 1,
         current_depth FLOAT DEFAULT 500,
         last_update TIMESTAMP DEFAULT NOW(),
         CONSTRAINT one_row CHECK (id = 1)
+      )
+    `);
+
+    // Нова таблиця для історії обмінів
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exchange_history (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        username VARCHAR(50) NOT NULL,
+        depth FLOAT NOT NULL,
+        exchange_time TIMESTAMP DEFAULT NOW()
       )
     `);
 
@@ -91,71 +103,7 @@ resetAndInitDatabase()
 
         console.log(`🌊 Глибина: ${Math.round(newDepth)} м (${depthChange >= 0 ? '+' : ''}${depthChange} м)`);
 
-        const playersResult = await pool.query(`SELECT * FROM players WHERE alive = TRUE`);
-        let updatedPlayers = [];
-
-        for (let row of playersResult.rows) {
-          let updated = false;
-          let actionLog = `${row.username}: `;
-
-          let pearls = parseFloat(row.pearls || 0);
-          let lostPearls = parseInt(row.lost_pearls || 0);
-          let coins = parseInt(row.coins || 0);
-          let lastLossDepth = row.last_loss_depth ? parseFloat(row.last_loss_depth) : null;
-/****
-          // Збирати перлини (глибше)
-          if (lostPearls > 0 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
-            const bonus = (newDepth - lastLossDepth) / lastLossDepth;
-            const gain = 1 + bonus;
-            pearls = pearls + gain;
-            lostPearls --;
-            updated = true;
-            actionLog += `зібрав перлини (+${gain.toFixed(2)}) 💎 `;
-          }
-
-          // Обміняти (мілкіше або перший раз)
-          if (pearls >= 1 && (lastLossDepth === null || newDepth <= lastLossDepth * (1 - row.play_threshold))) {
-            pearls -= 1;
-            lostPearls += 1;
-            coins += 1;
-            lastLossDepth = newDepth;
-            updated = true;
-            actionLog += `обміняв перлину (+1 монета) 🪙 `;
-
-            if (pearls <= 0) {
-              pearls = 0;
-              row.alive = false;
-              actionLog += `→ ЗМІЯ СТАЛА ПЕРНАТОЮ І ВІДЛЕТІЛА З СУНДУКОМ! 🪶💰`;
-            }
-          }
-****/
-          if (updated) {
-            await pool.query(`
-              UPDATE players 
-              SET pearls = $1, lost_pearls = $2, coins = $3, last_loss_depth = $4,
-                  alive = $5, death_time = $6
-              WHERE id = $7
-            `, [
-              pearls, lostPearls, coins, lastLossDepth,
-              pearls > 0, pearls <= 0 ? new Date() : row.death_time,
-              row.id
-            ]);
-
-            updatedPlayers.push({
-              username: row.username,
-              pearls: parseFloat(pearls.toFixed(2)),
-              lost_pearls: lostPearls,
-              coins: coins,
-              alive: pearls > 0,
-              action: actionLog.trim()
-            });
-
-            console.log(`🐍 ${actionLog.trim()}`);
-          }
-        }
-
         io.emit('depth_update', { depth: newDepth, serverTime: new Date().toISOString() });
-        if (updatedPlayers.length > 0) io.emit('players_updated', updatedPlayers);
 
       } catch (err) {
         console.error('Помилка в циклі гри:', err);
@@ -191,6 +139,23 @@ app.get('/leaderboard', async (req, res) => {
   }
 });
 
+// Новий endpoint для отримання історії обмінів
+app.get('/history/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const result = await pool.query(`
+      SELECT depth, exchange_time 
+      FROM exchange_history 
+      WHERE username = $1 
+      ORDER BY exchange_time DESC
+    `, [username]);
+    res.json({ success: true, history: result.rows });
+  } catch (err) {
+    console.error('/history помилка:', err);
+    res.json({ success: false, message: 'Помилка сервера' });
+  }
+});
+
 app.post('/eat', async (req, res) => {
   const { username } = req.body;
   try {
@@ -219,18 +184,16 @@ app.post('/eat', async (req, res) => {
     const newPearls = player.pearls + gain;
     const newLostPearls = player.lost_pearls - 1;
     
-    // Оновити базу даних
     await pool.query(
       'UPDATE players SET pearls = $1, lost_pearls = $2 WHERE username = $3', 
       [newPearls, newLostPearls, username]
     );
 
-    // Відправити ПОВНІ дані на фронтенд
     io.emit('players_updated', [{ 
       username, 
       pearls: parseFloat(newPearls.toFixed(2)),
-      lost_pearls: newLostPearls,  // ← Додано!
-      coins: player.coins,          // ← Додано!
+      lost_pearls: newLostPearls,
+      coins: player.coins,
       alive: true,
       action: `${username}: зібрав перлини вручну (+${gain.toFixed(2)}) 💎` 
     }]);
@@ -268,12 +231,17 @@ app.post('/walk', async (req, res) => {
       WHERE username = $7
     `, [newPearls, newLostPearls, newCoins, currentDepth, alive, alive ? player.death_time : new Date(), username]);
 
-    // Відправити ПОВНІ дані на фронтенд
+    // Записати в історію обмінів
+    await pool.query(`
+      INSERT INTO exchange_history (player_id, username, depth)
+      VALUES ($1, $2, $3)
+    `, [player.id, username, currentDepth]);
+
     io.emit('players_updated', [{
       username,
       pearls: parseFloat(newPearls.toFixed(2)),
-      lost_pearls: newLostPearls,  // ← Використовую змінну!
-      coins: newCoins,              // ← Використовую змінну!
+      lost_pearls: newLostPearls,
+      coins: newCoins,
       alive,
       action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ВІДЛЕТІЛА РАЗОМ З СУНДУКОМ! 🪶💰' : ''}`
     }]);
@@ -334,6 +302,8 @@ function generatePage(player, isNew) {
       .notification {color: #7fffd4; font-style: italic; margin: 10px; animation: fade 0.5s;}
       @keyframes fade {from{opacity:0} to{opacity:1}}
       .dead {color: #ff6b6b;}
+      #history-list {max-height: 300px; overflow-y: auto; text-align: left; margin-top: 15px;}
+      .history-item {padding: 8px; margin: 5px 0; background: rgba(127,255,212,0.1); border-radius: 5px; font-size: 0.9em;}
     </style>
   </head>
   <body>
@@ -356,7 +326,14 @@ function generatePage(player, isNew) {
     <div class="card">
       <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>
       <p><strong>Поточна глибина:</strong> <span id="current-depth" style="font-size:1.5em;font-weight:bold">${Math.round(500)}</span> м</p>
-      <p>Наступна зміна через <span id="countdown" style="font-weight:bold">30</span> секунд</p>
+      <p>Наступна зміна через <span id="countdown" style="font-weight:bold">10</span> секунд</p>
+    </div>
+
+    <div class="card">
+      <h3 style="color:#7fffd4">📜 Історія обмінів</h3>
+      <div id="history-list">
+        <p style="color:#aaa">Завантаження...</p>
+      </div>
     </div>
 
     <p>
@@ -369,15 +346,36 @@ function generatePage(player, isNew) {
       const socket = io();
       const username = "${player.username}";
 
-socket.on('depth_update', d => {
-  document.getElementById('current-depth').textContent = Math.round(d.depth);
-  let c = 10;  // ← Виправлено на 10
-  const timer = setInterval(() => {
-    c = c <= 1 ? 10 : c - 1;  // ← І тут теж 10
-    document.getElementById('countdown').textContent = c;
-  }, 1000);
-});
-      
+      // Завантажити історію при старті
+      loadHistory();
+
+      function loadHistory() {
+        fetch('/history/' + username)
+          .then(r => r.json())
+          .then(data => {
+            const list = document.getElementById('history-list');
+            if (data.success && data.history.length > 0) {
+              list.innerHTML = data.history.map(h => 
+                '<div class="history-item">🪙 Обмін на глибині <strong>' + Math.round(h.depth) + ' м</strong> (' + 
+                new Date(h.exchange_time).toLocaleString('uk-UA') + ')</div>'
+              ).join('');
+            } else {
+              list.innerHTML = '<p style="color:#aaa">Ще немає обмінів</p>';
+            }
+          })
+          .catch(() => {
+            document.getElementById('history-list').innerHTML = '<p style="color:#ff6b6b">Помилка завантаження</p>';
+          });
+      }
+
+      socket.on('depth_update', d => {
+        document.getElementById('current-depth').textContent = Math.round(d.depth);
+        let c = 10;
+        const timer = setInterval(() => {
+          c = c <= 1 ? 10 : c - 1;
+          document.getElementById('countdown').textContent = c;
+        }, 1000);
+      });
 
       socket.on('players_updated', ps => {
         ps.forEach(p => {
@@ -394,6 +392,11 @@ socket.on('depth_update', d => {
               n.textContent = '➤ ' + p.action;
               document.getElementById('player-card').appendChild(n);
               setTimeout(() => n.remove(), 10000);
+              
+              // Оновити історію після обміну
+              if (p.action.includes('обміняв перлину')) {
+                loadHistory();
+              }
             }
           }
         });

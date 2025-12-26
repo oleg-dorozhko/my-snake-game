@@ -167,27 +167,47 @@ app.post('/eat', async (req, res) => {
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
-    if (player.last_loss_depth === null || player.lost_pearls == 0) {
+
+    // Отримати найстарший обмін з історії
+    const historyRes = await pool.query(`
+      SELECT id, depth 
+      FROM exchange_history 
+      WHERE player_id = $1 
+      ORDER BY exchange_time ASC 
+      LIMIT 1
+    `, [player.id]);
+
+    // Якщо історії немає - немає і збору
+    if (historyRes.rows.length === 0) {
       return res.json({ success: false, message: 'Спочатку обміняй перлину' });
     }
 
-    const threshold = player.last_loss_depth * (1 + player.eat_threshold);
+    const oldestExchange = historyRes.rows[0];
+    const exchangeDepth = parseFloat(oldestExchange.depth);
+
+    // Перевірити умову глибини
+    const threshold = exchangeDepth * (1 + player.eat_threshold);
     if (currentDepth <= threshold) {
       return res.json({ 
         success: false, 
-        message: `Пірнай глибше! (зараз ${Math.round(currentDepth)} м, треба > ${Math.round(threshold)} м)` 
+        message: `Пірнай глибше! (зараз ${Math.round(currentDepth)} м, треба > ${Math.round(threshold)} м)`
       });
     }
 
-    const bonus = (currentDepth - player.last_loss_depth) / player.last_loss_depth;
+    // Розрахунок бонусу
+    const bonus = (currentDepth - exchangeDepth) / exchangeDepth;
     const gain = 1 + bonus;
     const newPearls = player.pearls + gain;
     const newLostPearls = player.lost_pearls - 1;
     
+    // Оновити гравця
     await pool.query(
       'UPDATE players SET pearls = $1, lost_pearls = $2 WHERE username = $3', 
       [newPearls, newLostPearls, username]
     );
+
+    // ВИДАЛИТИ цей обмін з історії
+    await pool.query('DELETE FROM exchange_history WHERE id = $1', [oldestExchange.id]);
 
     io.emit('players_updated', [{ 
       username, 
@@ -195,10 +215,10 @@ app.post('/eat', async (req, res) => {
       lost_pearls: newLostPearls,
       coins: player.coins,
       alive: true,
-      action: `${username}: зібрав перлини вручну (+${gain.toFixed(2)}) 💎` 
+      action: `${username}: зібрав перлину з глибини ${Math.round(exchangeDepth)} м (+${gain.toFixed(2)}) 💎` 
     }]);
 
-    res.json({ success: true, message: `+${gain.toFixed(2)} перлин 💎` });
+    res.json({ success: true, message: `+${gain.toFixed(2)} перлин 💎 (з ${Math.round(exchangeDepth)} м)` });
   } catch (err) {
     console.error('/eat помилка:', err);
     res.json({ success: false, message: 'Помилка сервера' });

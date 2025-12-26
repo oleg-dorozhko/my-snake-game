@@ -102,7 +102,7 @@ resetAndInitDatabase()
           let lostPearls = parseInt(row.lost_pearls || 0);
           let coins = parseInt(row.coins || 0);
           let lastLossDepth = row.last_loss_depth ? parseFloat(row.last_loss_depth) : null;
-
+/****
           // Збирати перлини (глибше)
           if (lostPearls > 0 && lastLossDepth !== null && newDepth > lastLossDepth * (1 + row.eat_threshold)) {
             const bonus = (newDepth - lastLossDepth) / lastLossDepth;
@@ -128,7 +128,7 @@ resetAndInitDatabase()
               actionLog += `→ ЗМІЯ СТАЛА ПЕРНАТОЮ І ВІДЛЕТІЛА З СУНДУКОМ! 🪶💰`;
             }
           }
-
+****/
           if (updated) {
             await pool.query(`
               UPDATE players 

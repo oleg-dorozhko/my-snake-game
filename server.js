@@ -155,7 +155,6 @@ app.get('/history/:username', async (req, res) => {
     res.json({ success: false, message: 'Помилка сервера' });
   }
 });
-
 app.post('/eat', async (req, res) => {
   const { username } = req.body;
   try {
@@ -168,34 +167,34 @@ app.post('/eat', async (req, res) => {
 
     if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
 
-    
+    // Спочатку перевірити чи є взагалі обміни
+    const checkHistoryRes = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM exchange_history 
+      WHERE player_id = $1
+    `, [player.id]);
+
+    if (parseInt(checkHistoryRes.rows[0].count) === 0) {
+      return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+    }
 
     // Отримати перший підходящий обмін з історії
     const historyRes = await pool.query(`
       SELECT id, depth 
       FROM exchange_history 
       WHERE player_id = $1 
-        AND depth * $2 < $3
+        AND depth * (1 + $2) < $3
       ORDER BY exchange_time ASC 
       LIMIT 1
-    `, [player.id, (1 + player.eat_threshold), currentDepth]);
-    
-    // Якщо історії немає - немає і збору
+    `, [player.id, player.eat_threshold, currentDepth]);
+
+    // Якщо немає підходящого обміну
     if (historyRes.rows.length === 0) {
-      return res.json({ success: false, message: 'Спочатку обміняй перлину' });
+      return res.json({ success: false, message: 'Пірнай глибше! Жодна перлина ще не доступна для збору' });
     }
 
     const oldestExchange = historyRes.rows[0];
     const exchangeDepth = parseFloat(oldestExchange.depth);
-
-    // Перевірити умову глибини
-    const threshold = exchangeDepth * (1 + player.eat_threshold);
-    if (currentDepth <= threshold) {
-      return res.json({ 
-        success: false, 
-        message: `Пірнай глибше! (зараз ${Math.round(currentDepth)} м, треба > ${Math.round(threshold)} м)`
-      });
-    }
 
     // Розрахунок бонусу
     const bonus = (currentDepth - exchangeDepth) / exchangeDepth;
@@ -220,8 +219,10 @@ app.post('/eat', async (req, res) => {
       alive: true,
       action: `${username}: зібрав перлину з глибини ${Math.round(exchangeDepth)} м (+${gain.toFixed(2)}) 💎` 
     }]);
-// Оновити історію на фронтенді
-io.emit('history_updated', { username });
+
+    // Оновити історію на фронтенді
+    io.emit('history_updated', { username });
+
     res.json({ success: true, message: `+${gain.toFixed(2)} перлин 💎 (з ${Math.round(exchangeDepth)} м)` });
   } catch (err) {
     console.error('/eat помилка:', err);

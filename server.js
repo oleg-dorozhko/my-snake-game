@@ -127,7 +127,7 @@ app.get('/leaderboard', async (req, res) => {
       <body><h1 style="color:#7fffd4">🏆 Лідерборд Пернатих Змій</h1>
       <table><tr><th>Гравець</th><th>Монети 🪙</th><th>Статус</th></tr>
       ${players.map(p => `<tr><td>${p.username}</td><td>${p.coins}</td>
-      <td>${p.alive ? 'Пірнає 🐉' : 'Відлетіла 🪶 (' + new Date(p.death_time).toLocaleString('uk-UA') + ')'}</td></tr>`).join('')}
+      <td>${p.alive ? 'Змія пірнає 🐉' : 'Змія улетіла 🪶 (' + new Date(p.death_time).toLocaleString('uk-UA') + ')'}</td></tr>`).join('')}
       </table><p style="margin-top:30px"><a href="/" style="color:#7fffd4;font-size:1.2em">← До гри</a></p></body></html>
     `);
   } catch (err) {
@@ -162,7 +162,7 @@ app.post('/eat', async (req, res) => {
     const player = playerRes.rows[0];
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
-    if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
+    if (!player.alive) return res.json({ success: false, message: 'Змія улетіла 🪶' });
 
     // Спочатку перевірити чи є взагалі обміни
     const checkHistoryRes = await pool.query(`
@@ -237,7 +237,7 @@ app.post('/walk', async (req, res) => {
     const player = playerRes.rows[0];
     const currentDepth = parseFloat(depthRes.rows[0].current_depth);
 
-    if (!player.alive) return res.json({ success: false, message: 'Змія відлетіла 🪶' });
+    if (!player.alive) return res.json({ success: false, message: 'Змія улетіла 🪶' });
     if (player.pearls < 1) return res.json({ success: false, message: 'Потрібна хоча б одна перлина для обміну' });
 
     const newPearls = player.pearls - 1;
@@ -265,12 +265,12 @@ app.post('/walk', async (req, res) => {
       lost_pearls: newLostPearls,
       coins: newCoins,
       alive,
-      action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ВІДЛЕТІЛА РАЗОМ З СУНДУКОМ! 🪶💰' : ''}`
+      action: `${username}: обміняв перлину (+1 монета)${!alive ? ' → ЗМІЯ УЛЕТІЛА РАЗОМ З СУНДУКОМ! 🪶💰' : ''}`
     }]);
 
     res.json({ 
       success: true, 
-      message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і відлетіла разом з сундуком! 🪶💰' 
+      message: alive ? '+1 монета 🪙' : 'Остання перлина… Змія стала пернатою і улетіла разом з сундуком! 🪶💰' 
     });
   } catch (err) {
     console.error('/walk помилка:', err);
@@ -427,7 +427,7 @@ function generatePage(player, isNew) {
       <p style="font-size:1.4em"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
       <p><strong>Обміняно перлин:</strong> ${lost}</p>
       <p style="font-size:1.3em"><strong>Монети:</strong> ${coins} 🪙</p>
-      <p><strong>Статус:</strong> ${alive ? 'Пірнає за перлинами 🐉' : '<span class="dead">Відлетіла разом з сундуком 🪶</span>'}</p>
+      <p><strong>Статус:</strong> ${alive ? 'Змія пірнає за перлинами 🐉' : '<span class="dead">Змія улетіла разом з сундуком 🪶</span>'}</p>
 
       <button id="walk-btn">🪙 Обміняти перлину</button>
       <p id="walk-status" style="min-height:24px"></p>
@@ -518,7 +518,7 @@ const MAX_POINTS = 60; // ~10 хв при 10 сек апдейті
             document.querySelectorAll('#player-card p')[0].innerHTML = '<strong style="font-size:1.4em">Перлини:</strong> ' + pearlsDisp + ' 💎' + (!p.alive ? ' 🪶' : '');
             document.querySelectorAll('#player-card p')[1].innerHTML = '<strong>Обміняно перлин:</strong> ' + (p.lost_pearls || 0);
             document.querySelectorAll('#player-card p')[2].innerHTML = '<strong style="font-size:1.3em">Монети:</strong> ' + (p.coins || 0) + ' 🪙';
-            document.querySelectorAll('#player-card p')[3].innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Пірнає за перлинами 🐉' : '<span class="dead">Відлетіла з сундуком 🪶</span>');
+            document.querySelectorAll('#player-card p')[3].innerHTML = '<strong>Статус:</strong> ' + (p.alive ? 'Змія пірнає за перлинами 🐉' : '<span class="dead">Змія улетіла з сундуком 🪶</span>');
 
             if (p.action) {
               const n = document.createElement('div');

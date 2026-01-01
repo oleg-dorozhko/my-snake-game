@@ -343,15 +343,52 @@ app.post('/join', async (req, res) => {
     if (result.rows.length > 0) {
       res.send(generatePage(result.rows[0], false));
     } else {
+      //max_pearls=10.0 need query update, username_settings table need
       result = await pool.query(`
         INSERT INTO players (username, pearls, lost_pearls, coins, last_loss_depth, alive)
-        VALUES ($1, 50.0, 0, 0, NULL, true) RETURNING *
+        VALUES ($1, $2, 0, 0, NULL, true) RETURNING *
       `, [username]);
       res.send(generatePage(result.rows[0], true));
     }
   } catch (err) {
     console.error(err);
     res.send('<h2>Помилка бази даних</h2>');
+  }
+});
+app.post('/settings', async (req, res) => {
+  const { username, pearls, eat_threshold, play_threshold } = req.body;
+
+  // базова валідація
+  if (
+    typeof pearls !== 'number' || pearls <= 0 ||
+    typeof eat_threshold !== 'number' || eat_threshold < 0 || eat_threshold > 1 ||
+    typeof play_threshold !== 'number' || play_threshold < 0 || play_threshold > 1
+  ) {
+    return res.json({ success: false, message: 'Некоректні значення' });
+  }
+
+  try {
+    const result = await pool.query(`
+      UPDATE players
+      SET pearls = $1,
+          eat_threshold = $2,
+          play_threshold = $3
+      WHERE username = $4
+      RETURNING pearls, eat_threshold, play_threshold
+    `, [pearls, eat_threshold, play_threshold, username]);
+
+    if (result.rowCount === 0) {
+      return res.json({ success: false, message: 'Гравець не знайдений' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Налаштування збережено',
+      settings: result.rows[0]
+    });
+  } catch (err) {
+    console.error('/settings помилка:', err);
+    res.json({ success: false, message: 'Помилка сервера' });
   }
 });
 
@@ -398,6 +435,24 @@ function generatePage(player, isNew) {
       <button id="eat-btn">💎 Збирати перлини</button>
       <p id="eat-status" style="min-height:24px"></p>
     </div>
+<div class="card">
+  <h3 style="color:#7fffd4">⚙️ Налаштування гравця</h3>
+
+  <label>Початкові перлини 💎</label><br>
+  <input id="set-pearls" type="number" step="0.1" min="0.1"
+         value="${parseFloat(player.pearls)}"><br><br>
+
+  <label>Відсоток збору (%)</label><br>
+  <input id="set-eat" type="number" step="0.001" min="0" max="1"
+         value="${player.eat_threshold}"><br><br>
+
+  <label>Відсоток обміну (%)</label><br>
+  <input id="set-play" type="number" step="0.001" min="0" max="1"
+         value="${player.play_threshold}"><br><br>
+
+  <button id="save-settings">💾 Зберегти</button>
+  <p id="settings-status" style="min-height:20px"></p>
+</div>
 
     <div class="card">
       <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>
@@ -500,6 +555,38 @@ function generatePage(player, isNew) {
 
       document.getElementById('walk-btn').onclick = () => act('/walk', 'walk-status');
       document.getElementById('eat-btn').onclick = () => act('/eat', 'eat-status');
+
+      document.getElementById('save-settings').onclick = () => {
+  const pearls = parseFloat(document.getElementById('set-pearls').value);
+  const eat_threshold = parseFloat(document.getElementById('set-eat').value);
+  const play_threshold = parseFloat(document.getElementById('set-play').value);
+
+  const st = document.getElementById('settings-status');
+  st.textContent = 'Зберігаємо...';
+  st.style.color = '#aaa';
+
+  fetch('/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      username,
+      pearls,
+      eat_threshold,
+      play_threshold
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    st.style.color = d.success ? '#7fffd4' : '#ff6b6b';
+    st.textContent = d.success ? '✓ Налаштування збережено' : '✗ ' + d.message;
+  })
+  .catch(() => {
+    st.style.color = '#ff6b6b';
+    st.textContent = 'Помилка звʼязку';
+  });
+};
+
+
     </script>
   </body>
   </html>`;

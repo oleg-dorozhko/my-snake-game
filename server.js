@@ -346,7 +346,7 @@ app.post('/join', async (req, res) => {
       //max_pearls=10.0 need query update, username_settings table need
       result = await pool.query(`
         INSERT INTO players (username, pearls, lost_pearls, coins, last_loss_depth, alive)
-        VALUES ($1, $2, 0, 0, NULL, true) RETURNING *
+        VALUES ($1, 10.0, 0, 0, NULL, true) RETURNING *
       `, [username]);
       res.send(generatePage(result.rows[0], true));
     }

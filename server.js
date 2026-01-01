@@ -459,6 +459,10 @@ function generatePage(player, isNew) {
       <p><strong>Поточна глибина:</strong> <span id="current-depth" style="font-size:1.5em;font-weight:bold">${Math.round(500)}</span> м</p>
       <p><span id="countdown" >Кожні 10 секунд...</span></p>
     </div>
+<div class="card">
+  <h3 style="color:#7fffd4">📈 Графік глибини</h3>
+  <canvas id="depthChart" width="380" height="160"></canvas>
+</div>
 
     <div class="card">
       <h3 style="color:#7fffd4">📜 Історія обмінів</h3>
@@ -475,6 +479,8 @@ function generatePage(player, isNew) {
     <script>
       const socket = io();
       const username = "${player.username}";
+const depthHistory = [];
+const MAX_POINTS = 60; // ~10 хв при 10 сек апдейті
 
       // Завантажити історію при старті
       loadHistory();
@@ -499,7 +505,7 @@ function generatePage(player, isNew) {
       }
 
       socket.on('depth_update', d => {
-        document.getElementById('current-depth').textContent = Math.round(d.depth);
+        document.getElementById('current-depth').textContent = Math.round(d.depth); drawDepthChart(d.depth);
         let c = 10;
         //const timer = setInterval(() => {          c = c <= 1 ? 10 : c - 1;          document.getElementById('countdown').textContent = c;        }, 1000);
          document.getElementById('countdown').textContent = "Чи зміниться глибина? Куди приведе змію глобальна велика могутня течія?"; 
@@ -585,6 +591,55 @@ function generatePage(player, isNew) {
     st.textContent = 'Помилка звʼязку';
   });
 };
+function drawDepthChart(depth) {
+  const canvas = document.getElementById('depthChart');
+  const ctx = canvas.getContext('2d');
+
+  // 1. зберігаємо значення
+  depthHistory.push(depth);
+  if (depthHistory.length > MAX_POINTS) {
+    depthHistory.shift();
+  }
+
+  // 2. очистити
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 3. знайти мін / макс
+  const min = Math.min(...depthHistory);
+  const max = Math.max(...depthHistory);
+  const range = Math.max(1, max - min);
+
+  // 4. фон
+  ctx.fillStyle = 'rgba(127,255,212,0.08)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 5. осі
+  ctx.strokeStyle = '#7fffd4';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(30, 10);
+  ctx.lineTo(30, canvas.height - 20);
+  ctx.lineTo(canvas.width - 10, canvas.height - 20);
+  ctx.stroke();
+
+  // 6. лінія глибини
+  ctx.strokeStyle = '#7fffd4';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+
+  depthHistory.forEach((d, i) => {
+    const x = 30 + (i / (MAX_POINTS - 1)) * (canvas.width - 50);
+    const y = 10 + (1 - (d - min) / range) * (canvas.height - 30);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+
+  ctx.stroke();
+
+  // 7. підпис поточної глибини
+  ctx.fillStyle = '#fff';
+  ctx.font = '12px Arial';
+  ctx.fillText(`${Math.round(depth)} м`, canvas.width - 70, 20);
+}
 
 
     </script>

@@ -396,10 +396,8 @@ function generatePage(player, isNew) {
       socket.on('depth_update', d => {
         document.getElementById('current-depth').textContent = Math.round(d.depth);
         let c = 10;
-        const timer = setInterval(() => {
-          c = c <= 1 ? 10 : c - 1;
-          document.getElementById('countdown').textContent = c;
-        }, 1000);
+        //const timer = setInterval(() => {          c = c <= 1 ? 10 : c - 1;          document.getElementById('countdown').textContent = c;        }, 1000);
+         document.getElementById('countdown').textContent = "Чи зміниться глибина? Куди приведе змію глобальна велика могутня течія?"; 
       });
 
       socket.on('players_updated', ps => {

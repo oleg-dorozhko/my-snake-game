@@ -284,10 +284,59 @@ app.post('/join', async (req, res) => {
     return res.send(`<h2 style="color:#ff6b6b">Ім'я від 2 до 20 символів</h2><a href="/">Назад</a>`);
   } 
   if(username=="admin_adminenko_123("){
-console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
+    console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
     await pool.query(`DROP TABLE IF EXISTS exchange_history CASCADE`);
     await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
     await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
+
+     console.log('🆕 Створюємо нові таблиці...');
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS players (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        pearls FLOAT DEFAULT 10.0,
+        lost_pearls INTEGER DEFAULT 0,
+        coins INTEGER DEFAULT 0,
+        last_loss_depth FLOAT,
+        alive BOOLEAN DEFAULT TRUE,
+        start_time TIMESTAMP DEFAULT NOW(),
+        death_time TIMESTAMP,
+        eat_threshold FLOAT DEFAULT 0.005,
+        play_threshold FLOAT DEFAULT 0.05,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS game_state (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        current_depth FLOAT DEFAULT 500,
+        last_update TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT one_row CHECK (id = 1)
+      )
+    `);
+
+    // Нова таблиця для історії обмінів
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exchange_history (
+        id SERIAL PRIMARY KEY,
+        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+        username VARCHAR(50) NOT NULL,
+        depth FLOAT NOT NULL,
+        exchange_time TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      INSERT INTO game_state (id, current_depth)
+      VALUES (1, 500)
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    console.log('✅ Нова база даних успішно створена! Готові до гри з перлинами 💎');
+
+    
   }
   try {
     let result = await pool.query('SELECT * FROM players WHERE username = $1', [username]);

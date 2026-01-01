@@ -634,11 +634,13 @@ function drawDepthChart(depth) {
   });
 
   ctx.stroke();
+  
+// 7. підпис поточної глибини
+ctx.fillStyle = '#fff';
+ctx.font = '12px Arial';
+ctx.fillText(Math.round(depth) + ' м', canvas.width - 70, 20);
 
-  // 7. підпис поточної глибини
-  ctx.fillStyle = '#fff';
-  ctx.font = '12px Arial';
-  ctx.fillText(`${Math.round(depth)} м`, canvas.width - 70, 20);
+ 
 }
 
 

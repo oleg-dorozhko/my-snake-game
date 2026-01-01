@@ -30,7 +30,7 @@ async function resetAndInitDatabase() {
       CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
-        pearls FLOAT DEFAULT 50.0,
+        pearls FLOAT DEFAULT 10.0,
         lost_pearls INTEGER DEFAULT 0,
         coins INTEGER DEFAULT 0,
         last_loss_depth FLOAT,

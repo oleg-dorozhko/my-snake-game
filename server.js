@@ -362,8 +362,7 @@ function generatePage(player, isNew) {
     </div>
 
     <p>
-      <a href="/leaderboard" style="color:#7fffd4; font-size:1.2em; margin:10px">🏆 Лідерборд</a> |
-      <a href="/" style="color:#7fffd4; font-size:1.2em; margin:10px">Змінити ім'я</a>
+      <a href="/leaderboard" style="color:#7fffd4; font-size:1.2em; margin:10px">🏆 Лідерборд</a>
     </p>
 
     <script src="/socket.io/socket.io.js"></script>

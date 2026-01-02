@@ -80,16 +80,20 @@ socket.on('players_updated', players => {
 
 // ===== ACTIONS =====
 function act(url, statusId) {
-  const btn =
-    url === '/walk'
-      ? document.getElementById('walk-btn')
-      : document.getElementById('eat-btn');
-
+  const btnMap = {
+    '/walk': 'walk-btn',
+    '/eat': 'eat-btn',
+    '/buy': 'buy-btn',
+    '/sell': 'sell-btn'
+  };
+  
+  const btn = document.getElementById(btnMap[url]);
   const st = document.getElementById(statusId);
+  
   btn.disabled = true;
   st.textContent = 'Чекаємо...';
   st.style.color = '#aaa';
-
+  
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,6 +118,12 @@ document.getElementById('walk-btn').onclick =
 
 document.getElementById('eat-btn').onclick =
   () => act('/eat', 'eat-status');
+
+document.getElementById('buy-btn').onclick =
+  () => act('/buy', 'buy-status');
+
+document.getElementById('sell-btn').onclick =
+  () => act('/sell', 'sell-status');
 
 // ===== SETTINGS =====
 document.getElementById('save-settings').onclick = () => {

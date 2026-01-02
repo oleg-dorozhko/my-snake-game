@@ -2,6 +2,7 @@ const express = require('express');
 const { Pool } = require('pg');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 
 const app = express();
 const port = process.env.PORT || 3000; 
@@ -114,7 +115,12 @@ app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+//app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', async (req, res) => {
+  const player = await loadPlayer(...);
+  const html = generatePage(player, player.isNew);
+  res.send(html);
+});
 
 app.get('/leaderboard', async (req, res) => {
   try {
@@ -392,13 +398,8 @@ app.post('/settings', async (req, res) => {
     res.json({ success: false, message: 'Помилка сервера' });
   }
 });
-app.get('/', async (req, res) => {
-  const player = await loadPlayer(...);
-  const html = generatePage(player, player.isNew);
-  res.send(html);
-});
-const fs = require('fs');
-const path = require('path');
+
+
 
 function generatePage(player, isNew) {
   const templatePath = path.join(__dirname, 'public', 'template.html');
@@ -423,84 +424,4 @@ function generatePage(player, isNew) {
 
   return html;
 }
-function generatePage(player, isNew) {
-  const pearls = player.pearls != null ? parseFloat(player.pearls).toFixed(1) : '0.0';
-  const lost = player.lost_pearls || 0;
-  const coins = player.coins || 0;
-  const alive = player.alive ?? true;
 
-  return `
-  <!DOCTYPE html>
-  <html lang="uk">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Водяна Змія - ${player.username}</title>
-    <link rel="stylesheet" href="/style.css">
-  </head>
-  <body>
-    <h1>🐍 Водяна Змія</h1>
-    <h2 ${isNew ? 'style="color:#7fffd4"' : ''}>${isNew ? 'Вітаємо' : 'З поверненням'}, ${player.username}!</h2>
-
-<div class="card">
-  <h3 style="color:#7fffd4">⚙️ Налаштування гравця</h3>
-
-  <label>Відсоток збору (%)</label><br>
-  <input id="set-eat" type="number" step="0.001" min="0" max="1"
-         value="${player.eat_threshold}"><br><br>
-
-  <label>Відсоток обміну (%)</label><br>
-  <input id="set-play" type="number" step="0.001" min="0" max="1"
-         value="${player.play_threshold}"><br><br>
-
-  <button id="save-settings">💾 Зберегти</button>
-  <p id="settings-status" style="min-height:20px"></p>
-</div>
-
-    <div class="card" id="player-card">
-      <p style="font-size:1.4em"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
-      <p><strong>Обміняно перлин:</strong> ${lost}</p>
-      <p style="font-size:1.3em"><strong>Монети:</strong> ${coins} 🪙</p>
-      <p><strong>Статус:</strong> ${alive ? 'Змія пірнає за перлинами 🐉' : '<span class="dead">Змія улетіла разом з сундуком 🪶</span>'}</p>
-
-      <button id="walk-btn">🪙 Обміняти перлину</button>
-      <p id="walk-status" style="min-height:24px"></p>
-
-      <button id="eat-btn">💎 Збирати перлини</button>
-      <p id="eat-status" style="min-height:24px"></p>
-    </div>
-
-
-    <div class="card">
-      <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>
-      <p><strong>Поточна глибина:</strong> <span id="current-depth" style="font-size:1.5em;font-weight:bold">${Math.round(500)}</span> м</p>
-      <p><span id="countdown" >Кожні 10 секунд...</span></p>
-    
-  <h3 style="color:#7fffd4">📈 Графік глибини</h3>
-  <canvas id="depthChart" width="380" height="160"></canvas>
-</div>
-
-    <div class="card">
-      <h3 style="color:#7fffd4">📜 Історія обмінів</h3>
-      <div id="history-list">
-        <p style="color:#aaa">Завантаження...</p>
-      </div>
-    </div>
-
-    <p>
-      <a href="/leaderboard" style="color:#7fffd4; font-size:1.2em; margin:10px">🏆 Лідерборд</a>
-    </p>
-<script>
-  window.GAME_CONFIG = {
-    username: "${player.username}",
-    initialDepth: 500
-  };
-</script>
-
-<script src="/socket.io/socket.io.js"></script>
-<script src="/app.js"></script>
-
-  
-  </body>
-  </html>`;
-}

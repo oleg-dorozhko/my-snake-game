@@ -448,8 +448,7 @@ function generatePage(player, isNew) {
       <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>
       <p><strong>Поточна глибина:</strong> <span id="current-depth" style="font-size:1.5em;font-weight:bold">${Math.round(500)}</span> м</p>
       <p><span id="countdown" >Кожні 10 секунд...</span></p>
-    </div>
-<div class="card">
+    
   <h3 style="color:#7fffd4">📈 Графік глибини</h3>
   <canvas id="depthChart" width="380" height="160"></canvas>
 </div>

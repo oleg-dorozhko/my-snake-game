@@ -58,3 +58,19 @@ button {
   border-radius: 5px;
   font-size: 0.9em;
 }
+
+table {
+  width: 80%;
+  margin: auto;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #7fffd4;
+  padding: 12px;
+}
+
+th {
+  background: rgba(127,255,212,0.2);
+}
+

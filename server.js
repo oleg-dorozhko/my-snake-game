@@ -115,12 +115,11 @@ app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-//app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/', async (req, res) => {
-  const player = await loadPlayer(...);
-  const html = generatePage(player, player.isNew);
-  res.send(html);
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+
 
 app.get('/leaderboard', async (req, res) => {
   try {

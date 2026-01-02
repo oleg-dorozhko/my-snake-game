@@ -49,16 +49,49 @@ async function resetAndInitDatabase() {
       )
     `);
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS exchange_history (
-        id SERIAL PRIMARY KEY,
-        player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
-        username VARCHAR(50) NOT NULL,
-        depth FLOAT NOT NULL,
-        exchange_time TIMESTAMP DEFAULT NOW(),
-        action_type VARCHAR(20) DEFAULT 'sell'
-      )
+    // Спочатку перевіримо чи існує таблиця
+    const tableCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'exchange_history' AND column_name = 'action_type'
     `);
+
+    if (tableCheck.rows.length === 0) {
+      // Якщо колонки немає, спробуємо додати її
+      try {
+        await pool.query(`
+          ALTER TABLE exchange_history 
+          ADD COLUMN IF NOT EXISTS action_type VARCHAR(20) DEFAULT 'sell'
+        `);
+        console.log('✅ Додано колонку action_type');
+      } catch (alterErr) {
+        // Якщо не вдалось додати колонку, створимо таблицю заново
+        console.log('📝 Створюємо таблицю exchange_history заново...');
+        await pool.query(`DROP TABLE IF EXISTS exchange_history CASCADE`);
+        await pool.query(`
+          CREATE TABLE exchange_history (
+            id SERIAL PRIMARY KEY,
+            player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+            username VARCHAR(50) NOT NULL,
+            depth FLOAT NOT NULL,
+            exchange_time TIMESTAMP DEFAULT NOW(),
+            action_type VARCHAR(20) DEFAULT 'sell'
+          )
+        `);
+      }
+    } else {
+      // Таблиця існує з правильною структурою
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS exchange_history (
+          id SERIAL PRIMARY KEY,
+          player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+          username VARCHAR(50) NOT NULL,
+          depth FLOAT NOT NULL,
+          exchange_time TIMESTAMP DEFAULT NOW(),
+          action_type VARCHAR(20) DEFAULT 'sell'
+        )
+      `);
+    }
 
     await pool.query(`
       INSERT INTO game_state (id, current_depth)
@@ -66,9 +99,9 @@ async function resetAndInitDatabase() {
       ON CONFLICT (id) DO NOTHING
     `);
 
-    console.log('✅ Нова база даних успішно створена! Готові до гри з перлинами 💎');
+    console.log('✅ База даних готова! 💎');
   } catch (err) {
-    console.error('❌ Помилка при створенні нової БД:', err);
+    console.error('❌ Помилка при створенні БД:', err);
     process.exit(1);
   }
 }

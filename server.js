@@ -399,12 +399,17 @@ app.post('/settings', async (req, res) => {
   }
 });
 
+const TEMPLATE = fs.readFileSync(
+  path.join(__dirname, 'public', 'template.html'),
+  'utf8'
+);
+
 
 
 function generatePage(player, isNew) {
-  const templatePath = path.join(__dirname, 'public', 'template.html');
-  let html = fs.readFileSync(templatePath, 'utf8');
-
+  //const templatePath = path.join(__dirname, 'public', 'template.html');
+  //let html = fs.readFileSync(templatePath, 'utf8');
+  let html = TEMPLATE;
   const data = {
     username: player.username,
     pearls: (player.pearls ?? 0).toFixed(1),

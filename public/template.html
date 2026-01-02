@@ -2,22 +2,82 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Водяна Змія - {{username}}</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <h1>🐍 Водяна Змія</h1>
+
 <h2 class="{{welcomeClass}}">
   {{welcomeText}}, {{username}}!
 </h2>
 
+<!-- ⚙️ Налаштування -->
 <div class="card">
-  <p><strong>Перлини:</strong> {{pearls}} 💎 {{feather}}</p>
-  <p><strong>Обміняно перлин:</strong> {{lost}}</p>
-  <p><strong>Монети:</strong> {{coins}} 🪙</p>
-  <p><strong>Статус:</strong> {{status}}</p>
+  <h3 style="color:#7fffd4">⚙️ Налаштування гравця</h3>
+
+  <label>Відсоток збору (%)</label><br>
+  <input id="set-eat" type="number" step="0.001" min="0" max="1"><br><br>
+
+  <label>Відсоток обміну (%)</label><br>
+  <input id="set-play" type="number" step="0.001" min="0" max="1"><br><br>
+
+  <button id="save-settings">💾 Зберегти</button>
+  <p id="settings-status" style="min-height:20px"></p>
 </div>
+
+<!-- 👤 Гравець -->
+<div class="card" id="player-card">
+  <p style="font-size:1.4em">
+    <strong>Перлини:</strong> {{pearls}} 💎 {{feather}}
+  </p>
+
+  <p><strong>Обміняно перлин:</strong> {{lost}}</p>
+
+  <p style="font-size:1.3em">
+    <strong>Монети:</strong> {{coins}} 🪙
+  </p>
+
+  <p><strong>Статус:</strong> {{status}}</p>
+
+  <button id="walk-btn">🪙 Обміняти перлину</button>
+  <p id="walk-status" style="min-height:24px"></p>
+
+  <button id="eat-btn">💎 Збирати перлини</button>
+  <p id="eat-status" style="min-height:24px"></p>
+</div>
+
+<!-- 🌊 Глибина -->
+<div class="card">
+  <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>
+
+  <p>
+    <strong>Поточна глибина:</strong>
+    <span id="current-depth" style="font-size:1.5em;font-weight:bold"> ??? </span> м
+  </p>
+
+  <p><span id="countdown">Кожні 10 секунд...</span></p>
+
+  <h3 style="color:#7fffd4">📈 Графік глибини</h3>
+  <canvas id="depthChart" width="380" height="160"></canvas>
+</div>
+
+<!-- 📜 Історія -->
+<div class="card">
+  <h3 style="color:#7fffd4">📜 Історія обмінів</h3>
+  <div id="history-list">
+    <p style="color:#aaa">Завантаження...</p>
+  </div>
+</div>
+
+<p>
+  <a href="/leaderboard"
+     style="color:#7fffd4; font-size:1.2em; margin:10px">
+    🏆 Лідерборд
+  </a>
+</p>
 
 <script>
   window.GAME_CONFIG = {
@@ -28,5 +88,6 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/app.js"></script>
+
 </body>
 </html>

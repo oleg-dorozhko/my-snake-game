@@ -414,10 +414,6 @@ function generatePage(player, isNew) {
 <div class="card">
   <h3 style="color:#7fffd4">⚙️ Налаштування гравця</h3>
 
-  <label>Початкові перлини 💎</label><br>
-  <input id="set-pearls" type="number" step="0.1" min="0.1"
-         value="${parseFloat(player.pearls)}"><br><br>
-
   <label>Відсоток збору (%)</label><br>
   <input id="set-eat" type="number" step="0.001" min="0" max="1"
          value="${player.eat_threshold}"><br><br>

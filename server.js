@@ -411,18 +411,6 @@ function generatePage(player, isNew) {
     <h1>🐍 Водяна Змія</h1>
     <h2 ${isNew ? 'style="color:#7fffd4"' : ''}>${isNew ? 'Вітаємо' : 'З поверненням'}, ${player.username}!</h2>
 
-    <div class="card" id="player-card">
-      <p style="font-size:1.4em"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
-      <p><strong>Обміняно перлин:</strong> ${lost}</p>
-      <p style="font-size:1.3em"><strong>Монети:</strong> ${coins} 🪙</p>
-      <p><strong>Статус:</strong> ${alive ? 'Змія пірнає за перлинами 🐉' : '<span class="dead">Змія улетіла разом з сундуком 🪶</span>'}</p>
-
-      <button id="walk-btn">🪙 Обміняти перлину</button>
-      <p id="walk-status" style="min-height:24px"></p>
-
-      <button id="eat-btn">💎 Збирати перлини</button>
-      <p id="eat-status" style="min-height:24px"></p>
-    </div>
 <div class="card">
   <h3 style="color:#7fffd4">⚙️ Налаштування гравця</h3>
 
@@ -441,6 +429,20 @@ function generatePage(player, isNew) {
   <button id="save-settings">💾 Зберегти</button>
   <p id="settings-status" style="min-height:20px"></p>
 </div>
+
+    <div class="card" id="player-card">
+      <p style="font-size:1.4em"><strong>Перлини:</strong> ${pearls} 💎${!alive ? ' 🪶' : ''}</p>
+      <p><strong>Обміняно перлин:</strong> ${lost}</p>
+      <p style="font-size:1.3em"><strong>Монети:</strong> ${coins} 🪙</p>
+      <p><strong>Статус:</strong> ${alive ? 'Змія пірнає за перлинами 🐉' : '<span class="dead">Змія улетіла разом з сундуком 🪶</span>'}</p>
+
+      <button id="walk-btn">🪙 Обміняти перлину</button>
+      <p id="walk-status" style="min-height:24px"></p>
+
+      <button id="eat-btn">💎 Збирати перлини</button>
+      <p id="eat-status" style="min-height:24px"></p>
+    </div>
+
 
     <div class="card">
       <h3 style="color:#7fffd4">🌊 Глобальний океанський потік</h3>

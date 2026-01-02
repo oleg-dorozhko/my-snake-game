@@ -405,19 +405,7 @@ function generatePage(player, isNew) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Водяна Змія - ${player.username}</title>
-    <style>
-      body {font-family: Arial, sans-serif; text-align: center; background: #001f3f; color: #fff; margin: 40px;}
-      .card {background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; display: inline-block; min-width: 420px; margin: 15px;}
-      h1 {color: #7fffd4;}
-      button {padding: 14px 28px; margin: 10px; font-size: 1.2em; border: none; border-radius: 10px; cursor: pointer; font-weight: bold;}
-      #walk-btn {background: #7fffd4; color: #001f3f;}
-      #eat-btn {background: #ff6b9d; color: white;}
-      .notification {color: #7fffd4; font-style: italic; margin: 10px; animation: fade 0.5s;}
-      @keyframes fade {from{opacity:0} to{opacity:1}}
-      .dead {color: #ff6b6b;}
-      #history-list {max-height: 300px; overflow-y: auto; text-align: left; margin-top: 15px;}
-      .history-item {padding: 8px; margin: 5px 0; background: rgba(127,255,212,0.1); border-radius: 5px; font-size: 0.9em;}
-    </style>
+    <link rel="stylesheet" href="/style.css">
   </head>
   <body>
     <h1>🐍 Водяна Змія</h1>

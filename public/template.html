@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Водяна Змія - {{username}}</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<h1>🐍 Водяна Змія</h1>
+<h2 class="{{welcomeClass}}">
+  {{welcomeText}}, {{username}}!
+</h2>
+
+<div class="card">
+  <p><strong>Перлини:</strong> {{pearls}} 💎 {{feather}}</p>
+  <p><strong>Обміняно перлин:</strong> {{lost}}</p>
+  <p><strong>Монети:</strong> {{coins}} 🪙</p>
+  <p><strong>Статус:</strong> {{status}}</p>
+</div>
+
+<script>
+  window.GAME_CONFIG = {
+    username: "{{username}}",
+    initialDepth: 500
+  };
+</script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

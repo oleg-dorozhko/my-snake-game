@@ -17,6 +17,7 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
+
 async function resetAndInitDatabase() {
   try {
 
@@ -391,7 +392,37 @@ app.post('/settings', async (req, res) => {
     res.json({ success: false, message: 'Помилка сервера' });
   }
 });
+app.get('/', async (req, res) => {
+  const player = await loadPlayer(...);
+  const html = generatePage(player, player.isNew);
+  res.send(html);
+});
+const fs = require('fs');
+const path = require('path');
 
+function generatePage(player, isNew) {
+  const templatePath = path.join(__dirname, 'public', 'template.html');
+  let html = fs.readFileSync(templatePath, 'utf8');
+
+  const data = {
+    username: player.username,
+    pearls: (player.pearls ?? 0).toFixed(1),
+    lost: player.lost_pearls ?? 0,
+    coins: player.coins ?? 0,
+    feather: player.alive ? '' : '🪶',
+    status: player.alive
+      ? 'Змія пірнає за перлинами 🐉'
+      : '<span class="dead">Змія улетіла разом з сундуком 🪶</span>',
+    welcomeText: isNew ? 'Вітаємо' : 'З поверненням',
+    welcomeClass: isNew ? 'new-user' : ''
+  };
+
+  for (const key in data) {
+    html = html.replaceAll(`{{${key}}}`, data[key]);
+  }
+
+  return html;
+}
 function generatePage(player, isNew) {
   const pearls = player.pearls != null ? parseFloat(player.pearls).toFixed(1) : '0.0';
   const lost = player.lost_pearls || 0;

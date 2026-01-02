@@ -34,7 +34,7 @@ socket.on('depth_update', d => {
   document.getElementById('current-depth').textContent = Math.round(d.depth);
   drawDepthChart(d.depth);
   document.getElementById('countdown').textContent =
-    'Чи зміниться глибина? Куди приведе змію глобальна течія?';
+    'Чи зміниться глибина за ці 10 секунд?<br/>Куди приведе змію глобальна течія?';
 });
 
 socket.on('players_updated', players => {

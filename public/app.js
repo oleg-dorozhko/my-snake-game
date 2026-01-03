@@ -195,7 +195,7 @@ function drawDepthChart(depth) {
   ctx.beginPath();
   depthHistory.forEach((d, i) => {
     const x = 30 + (i / (MAX_POINTS - 1)) * (canvas.width - 50);
-    const y = 10 + ((d - min) / range) * (canvas.height - 30); // Прибрано (1 - ...)
+    const y = canvas.height - 20 - ((d - min) / range) * (canvas.height - 30);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
   ctx.stroke();
@@ -203,4 +203,3 @@ function drawDepthChart(depth) {
   ctx.font = '12px Arial';
   ctx.fillText(Math.round(depth) + ' м', canvas.width - 70, 20);
 }
-

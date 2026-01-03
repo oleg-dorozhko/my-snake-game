@@ -199,24 +199,28 @@ function drawDepthChart(depth) {
   ctx.lineTo(canvas.width - 10, canvas.height - 20);
   ctx.stroke();
 
+  const top = 10;
+  const bottom = canvas.height - 20;
+  const height = bottom - top;
+
   // графік
   ctx.lineWidth = 2;
   ctx.beginPath();
   depthHistory.forEach((d, i) => {
     const x = 30 + (i / Math.max(1, MAX_POINTS - 1)) * (canvas.width - 50);
 
-    // КЛЮЧОВА КОРЕКЦІЯ:
-    // більша глибина -> нижче
-    const y =
-      10 + ((max - d) / range) * (canvas.height - 30);
+    // ✔ ПРАВИЛЬНО:
+    // більша глибина → нижче
+    const y = top + ((d - min) / range) * height;
 
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
 
-  // підпис поточного значення
+  // підпис
   ctx.fillStyle = '#fff';
   ctx.font = '12px Arial';
   ctx.fillText(Math.round(depth) + ' м', canvas.width - 70, 20);
 }
+

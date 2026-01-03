@@ -153,7 +153,7 @@ app.get('/leaderboard', async (req, res) => {
     const players = result.rows;
     res.send(`
       <!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8"><title>Лідерборд</title>
-      <link rel="stylesheet" href="/style.css"></head><body><h1 style="color:#7fffd4">🏆 Лідерборд Пернатих Змій</h1>
+      <link rel="stylesheet" href="/style.css"></head><body><h1 style="color:#7fffd4">🏆 Лідерборд Пiрнатих Змій</h1>
       <table><tr><th>Гравець</th><th>Монети 🪙</th><th>Статус</th></tr>
       ${players.map(p => `<tr><td>${p.username}</td><td>${p.coins}</td>
       <td>${p.alive ? 'Змія пірнає 🐉' : 'Змія улетіла 🪶 (' + new Date(p.death_time).toLocaleString('uk-UA') + ')'}</td></tr>`).join('')}

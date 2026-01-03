@@ -13,11 +13,27 @@ function loadHistory() {
     .then(data => {
       const list = document.getElementById('history-list');
       if (data.success && data.history.length > 0) {
-        list.innerHTML = data.history.map(h =>
+        list.innerHTML = data.history.map(h => {
+          if(h.action_type=="sell"){
+            return
+          `<div class="history-item">
+            🪙 Продаж на глибині <strong>${Math.round(h.depth)} м</strong>
+            (${new Date(h.exchange_time).toLocaleString('uk-UA')})
+          </div>`}
+          }
+          elseif   (h.action_type=="buy"){
+        return
+          `<div class="history-item">
+            🪙 Купівля на глибині <strong>${Math.round(h.depth)} м</strong>
+            (${new Date(h.exchange_time).toLocaleString('uk-UA')})
+          </div>`}
+          }
+          else {
+          return
           `<div class="history-item">
             🪙 Обмін на глибині <strong>${Math.round(h.depth)} м</strong>
             (${new Date(h.exchange_time).toLocaleString('uk-UA')})
-          </div>`
+          </div>`}}
         ).join('');
       } else {
         list.innerHTML = '<p style="color:#aaa">Ще немає обмінів</p>';

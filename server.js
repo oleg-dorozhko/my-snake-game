@@ -280,13 +280,14 @@ app.post('/sell', async (req, res) => {
     const purchaseDepth = parseFloat(purchaseRecord.depth);
 
     // Перевірка: продаж можливий тільки на меншій глибині
+    /****
     if (currentDepth >= purchaseDepth) {
       return res.json({ 
         success: false, 
         message: `Потрібно піднятися вище! Перлина куплена на ${Math.round(purchaseDepth)} м, зараз ${Math.round(currentDepth)} м` 
       });
     }
-
+    ****/
     // Розрахунок прибутку: різниця глибин як відсоток
     const depthDifference = purchaseDepth - currentDepth;
     const bonus = depthDifference / purchaseDepth;

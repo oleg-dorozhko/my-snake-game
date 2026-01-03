@@ -176,14 +176,21 @@ document.getElementById('save-settings').onclick = () => {
 function drawDepthChart(depth) {
   const canvas = document.getElementById('depthChart');
   const ctx = canvas.getContext('2d');
+
   depthHistory.push(depth);
   if (depthHistory.length > MAX_POINTS) depthHistory.shift();
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   const min = Math.min(...depthHistory);
   const max = Math.max(...depthHistory);
   const range = Math.max(1, max - min);
+
+  // фон
   ctx.fillStyle = 'rgba(127,255,212,0.08)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // осі
   ctx.strokeStyle = '#7fffd4';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -191,14 +198,24 @@ function drawDepthChart(depth) {
   ctx.lineTo(30, canvas.height - 20);
   ctx.lineTo(canvas.width - 10, canvas.height - 20);
   ctx.stroke();
+
+  // графік
   ctx.lineWidth = 2;
   ctx.beginPath();
   depthHistory.forEach((d, i) => {
-    const x = 30 + (i / (MAX_POINTS - 1)) * (canvas.width - 50);
-    const y = canvas.height - 20 - ((d - min) / range) * (canvas.height - 30);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    const x = 30 + (i / Math.max(1, MAX_POINTS - 1)) * (canvas.width - 50);
+
+    // КЛЮЧОВА КОРЕКЦІЯ:
+    // більша глибина -> нижче
+    const y =
+      10 + ((max - d) / range) * (canvas.height - 30);
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   });
   ctx.stroke();
+
+  // підпис поточного значення
   ctx.fillStyle = '#fff';
   ctx.font = '12px Arial';
   ctx.fillText(Math.round(depth) + ' м', canvas.width - 70, 20);

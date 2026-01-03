@@ -126,13 +126,13 @@ function act(url, statusId) {
       setTimeout(() => (btn.disabled = false), 2000);
     });
 }
-
+/***
 document.getElementById('walk-btn').onclick =
   () => act('/walk', 'walk-status');
 
 document.getElementById('eat-btn').onclick =
   () => act('/eat', 'eat-status');
-
+***/
 document.getElementById('buy-btn').onclick =
   () => act('/buy', 'buy-status');
 
